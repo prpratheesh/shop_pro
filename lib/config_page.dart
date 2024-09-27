@@ -14,8 +14,10 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'api_services.dart';
 import 'db_operations.dart';
 import 'logger.dart';
+import 'login_page.dart';
 import 'model_api_config.dart';
 import 'dart:math' as math;
+import 'package:package_info_plus/package_info_plus.dart';
 
 class ConfigPage extends StatefulWidget {
   @override
@@ -74,11 +76,14 @@ class _WelcomePageState extends State<ConfigPage>
     clientID: '',
     actCode: '',
     imageScroll: '',
+    priceDisplay: '',
+    imageDisplay: '',
     videoScroll: '',
     textScroll: '',
     dateTime: '',
   );
-  int _imgScrollCount = 1; // Initial count
+  int _imgScrollDuration = 1; // Initial count
+  int _priceDisplayDuration = 1; // Initial count
 
   @override
   initState() {
@@ -315,6 +320,8 @@ class _WelcomePageState extends State<ConfigPage>
             apiData.voice = _selectedVoice!;
             apiData.clientID = clientIDController.text;
             apiData.actCode = activationController.text;
+            apiData.priceDisplay = _priceDisplayDuration.toString();
+            apiData.imageDisplay = _imgScrollDuration.toString();
             apiData.imageScroll = _imgScrollCheck.toString();
             apiData.videoScroll = _videoScrollCheck.toString();
             apiData.textScroll = _textScrollCheck.toString();
@@ -335,6 +342,10 @@ class _WelcomePageState extends State<ConfigPage>
             Logger.log('PLEASE SELECT ALL OPTIONS...', level: LogLevel.info);
           }
         }
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => LoginPage()),
+        );
       },
       child: Container(
         width: MediaQuery.of(context).size.width / 2.5,
@@ -728,7 +739,7 @@ class _WelcomePageState extends State<ConfigPage>
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
-            'IMAGE SCROLL IN: ',
+            'IMAGE SCROLL : ',
             style: TextStyle(
               fontSize: fontSizes.baseFontSize,
               fontWeight: FontWeight.bold,
@@ -736,14 +747,14 @@ class _WelcomePageState extends State<ConfigPage>
           ),
           IconButton(
             icon: const Icon(Icons.remove),
-            onPressed: _decrement,
+            onPressed: () => _decrement('image'),
             color: Colors.red,
             padding: EdgeInsets.zero, // Remove padding from IconButton
             constraints: const BoxConstraints(), // Remove default constraints
           ),
           const SizedBox(width: 10), // Space between button and text
           Text(
-            '$_imgScrollCount SEC',
+            '$_imgScrollDuration SEC',
             style: TextStyle(
               fontSize: fontSizes.baseFontSize,
               fontWeight: FontWeight.bold,
@@ -752,16 +763,90 @@ class _WelcomePageState extends State<ConfigPage>
           const SizedBox(width: 10), // Space between text and plus button
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: _increment,
+            onPressed: () => _increment('image'),
             color: Colors.red,
             padding: EdgeInsets.zero, // Remove padding from IconButton
             constraints: const BoxConstraints(), // Remove default constraints
           ),
         ],
       ),
+          Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            'PRICE DISPLAY : ',
+            style: TextStyle(
+              fontSize: fontSizes.baseFontSize,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.remove),
+            onPressed: () => _decrement('price'),
+            color: Colors.red,
+            padding: EdgeInsets.zero, // Remove padding from IconButton
+            constraints: const BoxConstraints(), // Remove default constraints
+          ),
+          const SizedBox(width: 10), // Space between button and text
+          Text(
+            '$_priceDisplayDuration SEC',
+            style: TextStyle(
+              fontSize: fontSizes.baseFontSize,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 10), // Space between text and plus button
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () => _increment('price'),
+            color: Colors.red,
+            padding: EdgeInsets.zero, // Remove padding from IconButton
+            constraints: const BoxConstraints(), // Remove default constraints
+          ),
+        ],
+      ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                'App Version : ',
+                style: TextStyle(
+                  fontSize: fontSizes.baseFontSize,
+                  fontWeight: FontWeight.normal,
+                  color: Colors.redAccent,
+                ),
+              ),
+              FutureBuilder<String>(
+                future: _getAppVersion(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const CircularProgressIndicator(); // Show loading indicator while fetching version
+                  } else if (snapshot.hasError) {
+                    return Text('Error: ${snapshot.error}'); // Handle error case
+                  } else {
+                    return Text(
+                      snapshot.data ?? 'Unknown',
+                      style: TextStyle(
+                        fontSize: fontSizes.baseFontSize,
+                        fontWeight: FontWeight.normal,
+                        color: Colors.redAccent,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
         ],
       ),
     );
+  }
+
+  Future<String> _getAppVersion() async {
+    PackageInfo packageInfo = await PackageInfo.fromPlatform();
+    return packageInfo.version+'.'+packageInfo.buildNumber; // Returns the app version as a string
   }
 
   String? validateIpAddress(String? value) {
@@ -927,6 +1012,8 @@ class _WelcomePageState extends State<ConfigPage>
       _imgScrollCheck = apiData.imageScroll.toLowerCase() == 'true';
       _videoScrollCheck = apiData.videoScroll.toLowerCase() == 'true';
       _textScrollCheck = apiData.textScroll.toLowerCase() == 'true';
+      _imgScrollDuration = int.parse(apiData.imageDisplay);
+      _priceDisplayDuration = int.parse(apiData.priceDisplay);
       if(_imgScrollCheck){
         _selectedScrollOption = 'IMAGE';
         Logger.log('_selectedScrollOption = IMAGE', level: LogLevel.info);
@@ -949,15 +1036,23 @@ class _WelcomePageState extends State<ConfigPage>
     }
   }
 
-  void _increment() {
+  void _increment(String type) {
     setState(() {
-      _imgScrollCount++;
+      if (type == 'image') {
+        _imgScrollDuration++;
+      } else if (type == 'price') {
+        _priceDisplayDuration++;
+      }
     });
   }
 
-  void _decrement() {
+  void _decrement(String type) {
     setState(() {
-      if (_imgScrollCount > 1 && _imgScrollCount!=0) _imgScrollCount--;
+      if (type == 'image') {
+        if (_imgScrollDuration > 1) _imgScrollDuration--;
+      } else if (type == 'price') {
+        if (_priceDisplayDuration > 1) _priceDisplayDuration--;
+      }
     });
   }
 
@@ -968,7 +1063,6 @@ class _WelcomePageState extends State<ConfigPage>
       body: SingleChildScrollView(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          height: MediaQuery.of(context).size.height,
           width: MediaQuery.of(context).size.width,
           color: Colors.white,
           child: Column(
@@ -990,17 +1084,17 @@ class _WelcomePageState extends State<ConfigPage>
                     flex: 2,
                     child: _ipAddress(),
                   ),
-                  const SizedBox(width: 10), // Add space between widgets
+                  const SizedBox(width: 10),
                   Expanded(
                     flex: 2,
                     child: _portNo(),
                   ),
-                  const SizedBox(width: 10), // Add space between widgets
+                  const SizedBox(width: 10),
                   Expanded(
                     flex: 1,
                     child: _testButton(),
                   ),
-                  const SizedBox(width: 10), // Add space between widgets
+                  const SizedBox(width: 10),
                   Expanded(
                     flex: 1,
                     child: _saveButton(),
@@ -1018,17 +1112,17 @@ class _WelcomePageState extends State<ConfigPage>
                     flex: 2,
                     child: _currencyDropdown(),
                   ),
-                  const SizedBox(width: 10), // Add space between widgets
+                  const SizedBox(width: 10),
                   Expanded(
                     flex: 2,
                     child: _voiceDropdown(),
                   ),
-                  const SizedBox(width: 10), // Add space between widgets
+                  const SizedBox(width: 10),
                   Expanded(
                     flex: 1,
                     child: _initButton(),
                   ),
-                  const SizedBox(width: 10), // Add space between widgets
+                  const SizedBox(width: 10),
                   Expanded(
                     flex: 1,
                     child: _resetButton(),
@@ -1044,17 +1138,17 @@ class _WelcomePageState extends State<ConfigPage>
                     flex: 2,
                     child: _clientID(),
                   ),
-                  const SizedBox(width: 10), // Add space between widgets
+                  const SizedBox(width: 10),
                   Expanded(
                     flex: 2,
                     child: _activationBar(),
                   ),
-                  const SizedBox(width: 10), // Add space between widgets
+                  const SizedBox(width: 10),
                   Expanded(
                     flex: 1,
                     child: _registerBTN(),
                   ),
-                  const SizedBox(width: 10), // Add space between widgets
+                  const SizedBox(width: 10),
                   Expanded(
                     flex: 1,
                     child: _deRegister(),
@@ -1068,8 +1162,14 @@ class _WelcomePageState extends State<ConfigPage>
                   crossAxisAlignment: CrossAxisAlignment.center,
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: <Widget>[
-                    _messageBox(fontSizes),
-                    _configBox(),
+                    Expanded(
+                      flex: 3,
+                      child: _messageBox(fontSizes),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: _configBox(),
+                    ),
                   ]),
             ],
           ),

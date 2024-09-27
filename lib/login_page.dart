@@ -57,6 +57,8 @@ class _LoginPageState extends State<LoginPage> {
   OverlayEntry? _overlayEntry;
   final priceSpeaker = PriceSpeaker();
   bool overlay_show = false;
+  int imageDuration = 5;
+  int displayDuration = 5;
 
   @override
   void initState() {
@@ -70,7 +72,12 @@ class _LoginPageState extends State<LoginPage> {
     try {
       await getServerData(); // Ensure server data is fetched and API is initialized
       await _loadImageNameListFromApi(); // Proceed with image loading
-      _imageScrollTimer = Timer.periodic(const Duration(seconds: 3), (Timer timer) {
+      setState(() {
+        imageDuration = int.parse(apiData.imageDisplay);
+        displayDuration = int.parse(apiData.priceDisplay);
+        Logger.log('TIMER DATA LOADED : $imageDuration $displayDuration', level: LogLevel.info);
+      });
+      _imageScrollTimer = Timer.periodic(Duration(seconds: imageDuration), (Timer timer) {
         if (imageUrls.isNotEmpty && imageLoadComplete) {
           setState(() {
             _currentImageIndex = (_currentImageIndex + 1) % imageUrls.length;
@@ -80,6 +87,10 @@ class _LoginPageState extends State<LoginPage> {
       });
     } catch (e) {
       Logger.log('INITIALIZATION ERROR: $e', level: LogLevel.error);
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => ConfigPage()),
+      );
     }
     platform.setMethodCallHandler((MethodCall call) async {
       try {
@@ -98,7 +109,7 @@ class _LoginPageState extends State<LoginPage> {
             Logger.log('PLEASE WAIT. API NOT AVAILABLE.', level: LogLevel.error);
           }
           // After barcode is scanned, reduce the opacity to 0 after 2 seconds
-          Future.delayed(const Duration(seconds: 8), () {
+          Future.delayed(Duration(seconds: displayDuration), () {
             setState(() {
               _opacity = 0.0;
               barcode='';
@@ -214,12 +225,9 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
     lastScanTime = DateTime.now();
-
     final barcodeInput = _barcodeController.text;
     Logger.log('BARCODE SCANNED - $barcodeInput', level: LogLevel.info);
-
     await Future.delayed(const Duration(milliseconds: 500));
-
     setState(() {
       isBarcodeScanned = false;
       processing = false;
@@ -274,6 +282,10 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (e) {
       Logger.log('ERROR FETCHING SERVER DATA: $e', level: LogLevel.error);
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => ConfigPage()),
+      );
       rethrow; // Re-throw exception to handle it in the calling function
     }
   }
@@ -282,17 +294,49 @@ class _LoginPageState extends State<LoginPage> {
     setState(() {
       _apiAvailable = false;
     });
-    Logger.log('SCANNED BARCODE IS $barcode', level: LogLevel.info);
-    try {
-      Logger.log('CALLING BARCODE INQUIRY: $barcode', level: LogLevel.info);
-      final data = await _apiHelper.barcodeScan(barcode);
-      if(data!=null){
-        _onScanCompleted(data);
-      }else{
-        Logger.log('NO DATA FOUND', level: LogLevel.info);
+    if(barcode=="\$TRIOSSETUP\$"){
+      _hideSystemBars();
+      setState(() {
+        _apiAvailable = true;
+      });
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => ConfigPage()),
+      );
+    }
+    else {
+      try {
+        Logger.log('CALLING BARCODE INQUIRY: $barcode', level: LogLevel.info);
+        final data = await _apiHelper.barcodeScan(barcode);
+        if (data != null) {
+          _onScanCompleted(data);
+        } else {
+          if(!overlay_show) {
+            setState(() {
+              overlay_show = true;
+            });
+            _removeOverlay();
+            priceSpeaker.speakMessage("ITEM NOTT FOUND");
+            Logger.log('ITEM NOT FOUND', level: LogLevel.info);
+            final overlay = Overlay.of(context);
+            _overlayEntry = OverlayEntry(
+              builder: (context) => TemporaryOverlay(errorMessage: 'ITEM NOT FOUND', duration: Duration(seconds: displayDuration)),
+            );
+            overlay.insert(_overlayEntry!);
+            // Automatically remove the overlay after 5 seconds and update the state
+            _overlayRemovalTimer = Timer(Duration(seconds: displayDuration), () async {
+              _removeOverlay();
+              setState(() {
+                overlay_show = false;
+              });
+            });
+          }
+          priceSpeaker.speakMessage("ITEM NOTT FOUND");
+          Logger.log('NO DATA FOUND', level: LogLevel.info);
+        }
+      } catch (e) {
+        Logger.log('ERROR IN BARCODE INQUIRY: $e', level: LogLevel.error);
       }
-    } catch (e) {
-      Logger.log('ERROR IN BARCODE INQUIRY: $e', level: LogLevel.error);
     }
     setState(() {
       _apiAvailable = true;
@@ -301,26 +345,48 @@ class _LoginPageState extends State<LoginPage> {
 
   void _showOverlay(BarcodeData message) {
     // Remove any existing overlay before showing a new one
-    if(message.barcode!='STATUS429' && message.description!='STATUS429') {
+    if(message.barcode!='' || message.barcode!=null) {
+      if (message.barcode != 'STATUS429' &&
+          message.description != 'STATUS429') {
+        setState(() {
+          overlay_show = true;
+        });
+        _removeOverlay();
+        priceSpeaker.speakPrice(message.retail);
+        Logger.log('PRICE DISPLAY STARTING FOR $displayDuration SECONDS', level: LogLevel.info);
+        final overlay = Overlay.of(context);
+        _overlayEntry = OverlayEntry(
+          builder: (context) => TemporaryOverlay(message: message, duration: Duration(seconds: displayDuration)),
+        );
+        overlay.insert(_overlayEntry!);
+        // Automatically remove the overlay after 5 seconds and update the state
+        _overlayRemovalTimer = Timer(Duration(seconds: displayDuration), () async {
+          _removeOverlay();
+          setState(() {
+            overlay_show = false;
+          });
+        });
+      } else {
+        priceSpeaker.speakMessage('SCAN LIMIT REACHED');
+      }
+    }else{
       setState(() {
         overlay_show = true;
       });
       _removeOverlay();
-      priceSpeaker.speakPrice(message.retail);
+      priceSpeaker.speakMessage('ITEM NOT FOUND');
       final overlay = Overlay.of(context);
       _overlayEntry = OverlayEntry(
         builder: (context) => TemporaryOverlay(message: message),
       );
       overlay.insert(_overlayEntry!);
       // Automatically remove the overlay after 5 seconds and update the state
-      _overlayRemovalTimer = Timer(const Duration(seconds: 5), () async {
+      _overlayRemovalTimer = Timer(const Duration(seconds: 8), () async {
         _removeOverlay();
         setState(() {
           overlay_show = false;
         });
       });
-    }else{
-      priceSpeaker.speakMessage('SCAN LIMIT REACHED');
     }
   }
 
@@ -329,7 +395,6 @@ class _LoginPageState extends State<LoginPage> {
       _overlayEntry?.remove();
       _overlayEntry = null;
     }
-
     if (_overlayRemovalTimer != null) {
       _overlayRemovalTimer?.cancel();
       _overlayRemovalTimer = null;
@@ -347,7 +412,7 @@ class _LoginPageState extends State<LoginPage> {
   Widget _barcodeScanner(FontSizes fontSizes) {
     return AnimatedOpacity(
       opacity: _opacity,
-      duration: const Duration(seconds: 8),
+      duration: Duration(seconds: displayDuration),
       child: Container(
         width: MediaQuery.of(context).size.width / 3,
         height: MediaQuery.of(context).size.height / 10,
@@ -406,10 +471,6 @@ class _LoginPageState extends State<LoginPage> {
                 icon: const Icon(Icons.qr_code_scanner, color: Colors.black),
                 onPressed: () {
                   _hideSystemBars();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => ConfigPage()),
-                  );
                 },
               ),
             ),
@@ -421,7 +482,6 @@ class _LoginPageState extends State<LoginPage> {
                 icon: const Icon(Icons.qr_code_scanner, color: Colors.black),
                 onPressed: () {
                   _hideSystemBars();
-                  print('Suffix icon pressed');
                 },
               ),
             ),
@@ -436,48 +496,62 @@ class _LoginPageState extends State<LoginPage> {
     final fontSizes = FontSizes.fromContext(context);
     return Scaffold(
       body: SingleChildScrollView(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          height: MediaQuery.of(context).size.height,
-          width: MediaQuery.of(context).size.width,
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: imageBytesList.isNotEmpty
-                  ? MemoryImage(imageBytesList[_currentImageIndex]) // Use downloaded image
-                  : const AssetImage('assets/images/bg1.jpg') as ImageProvider, // Use fallback predefined image
-              fit: BoxFit.fill,
-              colorFilter: ColorFilter.mode(
-                  Colors.black.withOpacity(0), BlendMode.luminosity),
-            ),
-            borderRadius: const BorderRadius.all(Radius.circular(0)),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                  color: Colors.grey.shade200,
-                  offset: const Offset(2, 4),
-                  blurRadius: 5,
-                  spreadRadius: 2)
-            ],
-            gradient: const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.blue, Colors.purple]
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              const Spacer(),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 50.0), // Optional: Add padding for spacing from the bottom
-                child: _barcodeScanner(fontSizes), // Place the barcode scanner at the bottom
+        child: AnimatedSwitcher(
+          duration: const Duration(seconds: 1), // Animation duration
+          child: Container(
+            key: ValueKey<int>(_currentImageIndex), // Unique key for the current image
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            height: MediaQuery.of(context).size.height,
+            width: MediaQuery.of(context).size.width,
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: imageBytesList.isNotEmpty
+                    ? MemoryImage(imageBytesList[_currentImageIndex]) // Use downloaded image
+                    : const AssetImage('assets/images/bg1.jpg') as ImageProvider, // Use fallback predefined image
+                fit: BoxFit.fill,
+                colorFilter: ColorFilter.mode(
+                    Colors.black.withOpacity(0), BlendMode.luminosity),
               ),
-            ],
+              borderRadius: const BorderRadius.all(Radius.circular(0)),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                    color: Colors.grey.shade200,
+                    offset: const Offset(2, 4),
+                    blurRadius: 5,
+                    spreadRadius: 2)
+              ],
+              gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.blue, Colors.purple]
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 50.0), // Optional: Add padding for spacing from the bottom
+                  child: _barcodeScanner(fontSizes), // Place the barcode scanner at the bottom
+                ),
+              ],
+            ),
           ),
         ),
       ),
+      // floatingActionButton: FloatingActionButton(
+      //   onPressed: _changeImage, // Change the image when pressed
+      //   child: const Icon(Icons.refresh),
+      // ),
     );
   }
+
+  // void _changeImage() {
+  //   setState(() {
+  //     _currentImageIndex = (_currentImageIndex + 1) % imageBytesList.length; // Cycle through images
+  //   });
+  // }
 }
 
 Future<Uint8List> downloadImage(Map<String, String> args) async {

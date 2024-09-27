@@ -44,6 +44,8 @@ class DBProvider {
               "ClientID TEXT NOT NULL,"
               "ActCode TEXT NOT NULL,"
               "ImageScroll TEXT NOT NULL,"
+              "PriceDisplay TEXT NOT NULL DEFAULT 3,"//TIMER FOR PRICE DISPLAY
+              "ImageDisplay TEXT NOT NULL DEFAULT 3,"//TIMER FOR IMAGE DISPLAY
               "VideoScroll TEXT NOT NULL,"
               "TextScroll TEXT NOT NULL,"
               "DateTime TEXT NOT NULL"
@@ -57,14 +59,35 @@ class DBProvider {
               "DateTime TEXT NOT NULL"
               ")");
           Logger.log('TABLE ERRORLOG CREATED.', level: LogLevel.debug);
-        },onUpgrade: (db, oldDbVersion, newVersion) async {
-          Logger.log('DB UPGRADE.', level: LogLevel.debug);
+        },
+      onUpgrade: (db, oldDbVersion, newVersion) async {
+        if (oldDbVersion < 2) {
+          try {
+            // Check if 'PriceDisplay' column exists
+            final columnExists = await db.rawQuery(
+                "PRAGMA table_info(ApiData)");
+            final columns = columnExists.map((e) => e['name'] as String).toList();
+
+            if (!columns.contains('PriceDisplay')) {
+              await db.execute("ALTER TABLE ApiData ADD COLUMN PriceDisplay TEXT NOT NULL DEFAULT 3");
+              Logger.log('ADDED PRICE DISPLAY COLUMN TO API DATA TABLE.', level: LogLevel.debug);
+            }
+
+            if (!columns.contains('ImageDisplay')) {
+              await db.execute("ALTER TABLE ApiData ADD COLUMN ImageDisplay TEXT NOT NULL DEFAULT 3");
+              Logger.log('ADDED IMAGE DISPLAY COLUMN TO API DATA TABLE.', level: LogLevel.debug);
+            }
+          } catch (e) {
+            Logger.log('ERROR UPGRADING DATABASE: ${e.toString().toUpperCase()}.', level: LogLevel.error);
+          }
+        }
+          Logger.log('DB UPGRADE FROM VERSION $oldDbVersion TO $newVersion.', level: LogLevel.debug);
       await db.setVersion(newVersion);
     },onDowngrade: (db, oldDbVersion, newVersion) async {
-          Logger.log('DB DOWNGRADE.', level: LogLevel.debug);
+          Logger.log('DB UPGRADE FROM VERSION $newVersion TO $oldDbVersion.', level: LogLevel.debug);
       await db.setVersion(oldDbVersion);
-        }
-        );
+    }
+    );
   }
   /////////////////////////////////////Config Operations///////////////////////////////////////
   Future<bool> insertApiData(ApiDataModel config) async {

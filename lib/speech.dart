@@ -36,6 +36,7 @@ class PriceSpeaker {
     await flutterTts.speak(formattedPrice);
   }
 
+  // Function to speak a custom message
   Future<void> speakMessage(String message) async {
     await flutterTts.speak(message);
   }

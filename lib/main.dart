@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shop_pro/config_page.dart';
 import 'db_operations.dart';
 import 'logger.dart';
 import 'login_page.dart';
@@ -22,7 +23,7 @@ class AppState extends State<App> {
     super.initState();
     Logger.log('APPLICATION STARTED.', level: LogLevel.info);
     Logger.log('DB SETTINGS STARTED.', level: LogLevel.info);
-    DBProvider.db.initDB(newVersion: 1);
+    DBProvider.db.initDB(newVersion: 2);
     Logger.log('DB SETTINGS COMPLETED.', level: LogLevel.info);
     requestPermissions();
     Logger.log('PERMISSION SETTINGS COMPLETED.', level: LogLevel.info);
@@ -59,7 +60,8 @@ class AppState extends State<App> {
     return MaterialApp(
       title: "Shop Pro",
       debugShowCheckedModeBanner: false,
-      home: LoginPage(),
+      home: LoginPage(),//LIVE
+      // home: ConfigPage(),//TESTING
     );
   }
 }

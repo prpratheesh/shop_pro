@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:intl/intl.dart';
 import 'package:shop_pro/model_barcode.dart';
-
 import 'font_sizes.dart';
 
 class TemporaryOverlay extends StatelessWidget {
-  final BarcodeData message;
+  final BarcodeData? message; // Optional BarcodeData
+  final String? errorMessage; // Optional error message
   final Duration duration;
 
   TemporaryOverlay({
-    required this.message,
-    this.duration = const Duration(seconds: 5),
-  });
+    this.message, // Make it nullable to allow for an error message
+    this.errorMessage, // Allow passing a string message
+    Duration? duration,
+  }) : duration = duration ?? const Duration(seconds: 5);
 
   @override
   Widget build(BuildContext context) {
@@ -21,6 +20,7 @@ class TemporaryOverlay extends StatelessWidget {
     final screenHeight = MediaQuery.of(context).size.height;
     final width = screenWidth * 0.999;
     final height = screenHeight * 0.999;
+
     return Positioned(
       top: (screenHeight - height) / 2, // Center vertically
       left: (screenWidth - width) / 2, // Center horizontally
@@ -45,80 +45,72 @@ class TemporaryOverlay extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(message.barcode,
+              if (message != null) ...[
+                Text(
+                  message!.barcode,
                   style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: fontSizes.largerFontSize5,
-                      color: Colors.red)),//BARCODE
-              Text(message.description,
+                    fontWeight: FontWeight.bold,
+                    fontSize: fontSizes.largerFontSize8,
+                    color: Colors.red,
+                  ),
+                ), // BARCODE
+                Text(
+                  message!.description,
                   style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: fontSizes.largerFontSize2,
-                      color: Colors.blue)),//NAME ENGLISH
-              Text(message.arabic,
+                    fontWeight: FontWeight.bold,
+                    fontSize: fontSizes.largerFontSize5,
+                    color: Colors.blue,
+                  ),
+                ), // NAME ENGLISH
+                Text(
+                  message!.arabic,
                   style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: fontSizes.largerFontSize4,
-                      color: Colors.blue)),//NAME ARABIC
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'AED: ',
-                      style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: fontSizes.largerFontSize7,
+                    color: Colors.blue,
+                  ),
+                ), // NAME ARABIC
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'AED: ',
+                        style: TextStyle(
                           color: Colors.blue,
-                          fontSize: fontSizes.largerFontSize7),
-                    ),
-                    TextSpan(
-                      text: message.retail.toStringAsFixed(2),
-                      style: TextStyle(
+                          fontSize: fontSizes.largerFontSize9,
+                        ),
+                      ),
+                      TextSpan(
+                        text: message!.retail.toStringAsFixed(2),
+                        style: TextStyle(
                           color: Colors.green,
                           fontWeight: FontWeight.bold,
-                          fontSize: fontSizes
-                              .largerFontSize7), // Set the color and style for retail price
-                    ),
-                    TextSpan(
-                      text: ' /-',
-                      style: TextStyle(
+                          fontSize: fontSizes.largerFontSize10,
+                        ), // Set the color and style for retail price
+                      ),
+                      TextSpan(
+                        text: ' /-',
+                        style: TextStyle(
                           color: Colors.red,
-                          fontSize: fontSizes
-                              .largerFontSize7), // Set the color and font size for "/-"
-                    ),
-                  ],
-                ),
-              ),//RETAIL CURRENCY, PRICE AND SEPARATOR
-              // _buildDataRow('Barcode', message.barcode),
-              // _buildDataRow('Description', message.description),
-              // _buildDataRow('Arabic', message.arabic),
-              // _buildDataRow('Retail Price', message.retail.toStringAsFixed(2)),
-              // _buildDataRow('Special Price', message.spFlag == 1 ? message.spPrice.toStringAsFixed(2) : 'N/A'),
+                          fontSize: fontSizes.largerFontSize8,
+                        ), // Set the color and font size for "/-"
+                      ),
+                    ],
+                  ),
+                ), // RETAIL CURRENCY, PRICE AND SEPARATOR
+              ] else if (errorMessage != null) ...[
+                Text(
+                  errorMessage!,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: fontSizes.largerFontSize8,
+                    color: Colors.red, // Set error message color
+                  ),
+                ), // ERROR MESSAGE
+              ],
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildDataRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        children: [
-          Text(
-            '$label: ',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 16),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
       ),
     );
   }

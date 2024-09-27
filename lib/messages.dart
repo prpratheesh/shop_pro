@@ -13,7 +13,7 @@ class SnackbarHelper {
         ),
         textAlign: TextAlign.center,
       ),
-      duration: const Duration(seconds: 2),
+      duration: const Duration(seconds: 1),
       backgroundColor: Colors.blue,
       behavior: SnackBarBehavior.floating,
       elevation: 10,

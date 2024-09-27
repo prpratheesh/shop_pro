@@ -17,7 +17,7 @@
     <uses-permission android:name="android.permission.INTERNET">
     </uses-permission>
     <application
-        android:label="shop_pro"
+        android:label="Shop Pro"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
