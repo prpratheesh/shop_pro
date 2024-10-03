@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -18,9 +19,9 @@ class ApiHelper {
         'INITIALIZING DIO WITH BASE URL: $_baseUrl', level: LogLevel.debug);
     _dio.options = BaseOptions(
       baseUrl: _baseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
-      sendTimeout: const Duration(seconds: 10),
+      connectTimeout: const Duration(seconds: 5),
+      receiveTimeout: const Duration(seconds: 5),
+      sendTimeout: const Duration(seconds: 5),
       headers: {
         'Content-Type': 'application/json',
       },
@@ -138,6 +139,42 @@ class ApiHelper {
     } catch (e) {
       Logger.log('GENERAL EXCEPTION: ${e.toString().toUpperCase()}.', level: LogLevel.error);
       return null;
+    }
+  }
+
+  Future<String?> updateTerminalDetailsTServer(payload) async {
+    Logger.log('DIO UPDATING TERMINAL DETAILS IN SERVER.', level: LogLevel.debug);
+    try {
+      final response = await _dio.post('/insertTerminalData', data: payload);
+      if (response.statusCode == 200) {
+        Logger.log('DIO TERMINAL DETAILS UPDATED.', level: LogLevel.debug);
+        return response.data['message'];
+      }
+      Logger.log('DIO TERMINAL DETAIL UPDATE FAILURE WITH STATUS CODE ${response.statusCode}.',
+          level: LogLevel.error);
+      return 'TERMINAL UPDATE FAILURE';
+    } catch (e) {
+      Logger.log('GENERAL EXCEPTION: ${e.toString().toUpperCase()}.',
+          level: LogLevel.error);
+      return e.toString();
+    }
+  }
+
+  Future<String?> getActivationDetailsFromServer(payload) async{
+    Logger.log('DIO GETTING ACTIVATION DETAILS FROM SERVER.', level: LogLevel.debug);
+    try {
+      final response = await _dio.post('/getActivationData', data: payload);
+      if (response.statusCode == 200) {
+        Logger.log('DIO ACTIVATION DATA FETCHED.', level: LogLevel.debug);
+        return response.data['activationCode'];
+      }
+      Logger.log('DIO ACTIVATION DATA FETCH FAILURE WITH STATUS CODE ${response.statusCode}.',
+          level: LogLevel.error);
+      return 'ERROR';
+    } catch (e) {
+      Logger.log('GENERAL EXCEPTION: ${e.toString().toUpperCase()}.',
+          level: LogLevel.error);
+      return 'ERROR';
     }
   }
 }

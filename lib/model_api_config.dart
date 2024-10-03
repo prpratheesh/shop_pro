@@ -18,6 +18,9 @@ class ApiDataModel {
   String voice;
   String clientID;
   String actCode;
+  String actKey;
+  String actAllow;
+  String actStatus;
   String imageScroll;
   String priceDisplay;
   String imageDisplay;
@@ -33,6 +36,9 @@ class ApiDataModel {
     required this.voice,
     required this.clientID,
     required this.actCode,
+    required this.actKey,
+    required this.actAllow,
+    required this.actStatus,
     required this.imageScroll,
     required this.priceDisplay,
     required this.imageDisplay,
@@ -50,6 +56,9 @@ class ApiDataModel {
     voice: json['Voice'] as String,
     clientID: json['ClientID'] as String,
     actCode: json['ActCode'] as String,
+    actKey: json['ActKey'] as String,
+    actAllow: json['ActAllow'] as String,
+    actStatus: json['ActStatus'] as String,
     imageScroll: json['ImageScroll'] as String,
     priceDisplay: json['PriceDisplay'] as String,
     imageDisplay: json['ImageDisplay'] as String,
@@ -67,6 +76,9 @@ class ApiDataModel {
     'Voice': voice,
     'ClientID': clientID,
     'ActCode': actCode,
+    'ActKey': actKey,
+    'ActAllow': actAllow,
+    'ActStatus': actStatus,
     'ImageScroll': imageScroll,
     'PriceDisplay': priceDisplay,
     'ImageDisplay': imageDisplay,
@@ -76,6 +88,6 @@ class ApiDataModel {
   };
   @override
   String toString() {
-    return 'ApiDataModel(recNo: $recNo, serverIP: $serverIP, portNo: $portNo, currency: $currency, voice: $voice, clientID: $clientID, actCode: $actCode, imageScroll: $imageScroll, PriceDisplay: $imageScroll, ImageDisplay: $imageDisplay,videoScroll: $videoScroll, textScroll: $textScroll, dateTime: $dateTime)';
+    return 'ApiDataModel(recNo: $recNo, serverIP: $serverIP, portNo: $portNo, currency: $currency, voice: $voice, clientID: $clientID, actCode: $actCode, actKey: $actKey, actAllow: $actAllow, actStatus: $actStatus, imageScroll: $imageScroll, PriceDisplay: $imageScroll, ImageDisplay: $imageDisplay,videoScroll: $videoScroll, textScroll: $textScroll, dateTime: $dateTime)';
   }
 }

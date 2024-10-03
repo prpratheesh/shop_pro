@@ -23,7 +23,7 @@ class AppState extends State<App> {
     super.initState();
     Logger.log('APPLICATION STARTED.', level: LogLevel.info);
     Logger.log('DB SETTINGS STARTED.', level: LogLevel.info);
-    DBProvider.db.initDB(newVersion: 2);
+    DBProvider.db.initDB(newVersion: 3);
     Logger.log('DB SETTINGS COMPLETED.', level: LogLevel.info);
     requestPermissions();
     Logger.log('PERMISSION SETTINGS COMPLETED.', level: LogLevel.info);
@@ -60,8 +60,8 @@ class AppState extends State<App> {
     return MaterialApp(
       title: "Shop Pro",
       debugShowCheckedModeBanner: false,
-      home: LoginPage(),//LIVE
-      // home: ConfigPage(),//TESTING
+      // home: LoginPage(),//LIVE
+      home: ConfigPage(),//TESTING
     );
   }
 }

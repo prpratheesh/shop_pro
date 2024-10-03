@@ -43,6 +43,9 @@ class DBProvider {
               "Voice TEXT NOT NULL,"
               "ClientID TEXT NOT NULL,"
               "ActCode TEXT NOT NULL,"
+              "ActKey TEXT NOT NULL,"
+              "ActAllow TEXT NOT NULL DEFAULT 0,"
+              "ActStatus TEXT NOT NULL DEFAULT 0,"
               "ImageScroll TEXT NOT NULL,"
               "PriceDisplay TEXT NOT NULL DEFAULT 3,"//TIMER FOR PRICE DISPLAY
               "ImageDisplay TEXT NOT NULL DEFAULT 3,"//TIMER FOR IMAGE DISPLAY
@@ -61,7 +64,7 @@ class DBProvider {
           Logger.log('TABLE ERRORLOG CREATED.', level: LogLevel.debug);
         },
       onUpgrade: (db, oldDbVersion, newVersion) async {
-        if (oldDbVersion < 2) {
+        if (oldDbVersion < 3) {
           try {
             // Check if 'PriceDisplay' column exists
             final columnExists = await db.rawQuery(
@@ -77,6 +80,22 @@ class DBProvider {
               await db.execute("ALTER TABLE ApiData ADD COLUMN ImageDisplay TEXT NOT NULL DEFAULT 3");
               Logger.log('ADDED IMAGE DISPLAY COLUMN TO API DATA TABLE.', level: LogLevel.debug);
             }
+
+            if (!columns.contains('ActAllow')) {
+              await db.execute("ALTER TABLE ApiData ADD COLUMN ActAllow TEXT NOT NULL DEFAULT 0");
+              Logger.log('ADDED ACTIVATION ALLOW COLUMN TO API DATA TABLE.', level: LogLevel.debug);
+            }
+
+            if (!columns.contains('ActStatus')) {
+              await db.execute("ALTER TABLE ApiData ADD COLUMN ActStatus TEXT NOT NULL DEFAULT 0");
+              Logger.log('ADDED ACTIVATION STATUS COLUMN TO API DATA TABLE.', level: LogLevel.debug);
+            }
+
+            if (!columns.contains('ActKey')) {
+              await db.execute("ALTER TABLE ApiData ADD COLUMN ActKey TEXT NOT NULL DEFAULT 0");
+              Logger.log('ADDED ACTIVATION KEY COLUMN TO API DATA TABLE.', level: LogLevel.debug);
+            }
+
           } catch (e) {
             Logger.log('ERROR UPGRADING DATABASE: ${e.toString().toUpperCase()}.', level: LogLevel.error);
           }
@@ -116,8 +135,12 @@ class DBProvider {
     final db = await database;
     try {
       final res = await db?.query("ApiData");
+      if (res == null || res.isEmpty) {
+        Logger.log('NO DATA FOUND IN TABLE API DATA.', level: LogLevel.debug);
+        return null;  // Safely handle null or empty result
+      }
       Logger.log('$res', level: LogLevel.debug);
-      return res!.isNotEmpty ? ApiDataModel.fromMap(res.first) : null;
+      return ApiDataModel.fromMap(res.first);
     } catch (e) {
       Logger.log('ERROR GETTING DATA FROM TABLE API DATA. ${e.toString().toUpperCase()}.', level: LogLevel.error);
       return null;
