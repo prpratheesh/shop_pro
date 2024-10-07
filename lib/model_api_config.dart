@@ -21,6 +21,8 @@ class ApiDataModel {
   String actKey;
   String actAllow;
   String actStatus;
+  String logoEnable;
+  String bannerEnable;
   String imageScroll;
   String priceDisplay;
   String imageDisplay;
@@ -39,6 +41,8 @@ class ApiDataModel {
     required this.actKey,
     required this.actAllow,
     required this.actStatus,
+    required this.logoEnable,
+    required this.bannerEnable,
     required this.imageScroll,
     required this.priceDisplay,
     required this.imageDisplay,
@@ -59,6 +63,8 @@ class ApiDataModel {
     actKey: json['ActKey'] as String,
     actAllow: json['ActAllow'] as String,
     actStatus: json['ActStatus'] as String,
+    logoEnable: json['LogoEnable'] as String,
+    bannerEnable: json['BannerEnable'] as String,
     imageScroll: json['ImageScroll'] as String,
     priceDisplay: json['PriceDisplay'] as String,
     imageDisplay: json['ImageDisplay'] as String,
@@ -79,6 +85,8 @@ class ApiDataModel {
     'ActKey': actKey,
     'ActAllow': actAllow,
     'ActStatus': actStatus,
+    'LogoEnable': logoEnable,
+    'BannerEnable': bannerEnable,
     'ImageScroll': imageScroll,
     'PriceDisplay': priceDisplay,
     'ImageDisplay': imageDisplay,
@@ -88,6 +96,6 @@ class ApiDataModel {
   };
   @override
   String toString() {
-    return 'ApiDataModel(recNo: $recNo, serverIP: $serverIP, portNo: $portNo, currency: $currency, voice: $voice, clientID: $clientID, actCode: $actCode, actKey: $actKey, actAllow: $actAllow, actStatus: $actStatus, imageScroll: $imageScroll, PriceDisplay: $imageScroll, ImageDisplay: $imageDisplay,videoScroll: $videoScroll, textScroll: $textScroll, dateTime: $dateTime)';
+    return 'ApiDataModel(recNo: $recNo, serverIP: $serverIP, portNo: $portNo, currency: $currency, voice: $voice, clientID: $clientID, actCode: $actCode, actKey: $actKey, actAllow: $actAllow, actStatus: $actStatus, logoEnable: $logoEnable, bannerEnable: $bannerEnable, imageScroll: $imageScroll, PriceDisplay: $priceDisplay, ImageDisplay: $imageDisplay,videoScroll: $videoScroll, textScroll: $textScroll, dateTime: $dateTime)';
   }
 }

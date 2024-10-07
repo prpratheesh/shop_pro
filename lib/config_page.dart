@@ -12,6 +12,7 @@ import 'dart:ui';
 import 'dart:async';
 import 'package:shop_pro/font_sizes.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:shop_pro/speech.dart';
 import 'aes.dart';
 import 'api_services.dart';
 import 'db_operations.dart';
@@ -59,6 +60,8 @@ class _WelcomePageState extends State<ConfigPage>
   bool _imgScrollCheck = false;
   bool _videoScrollCheck = false;
   bool _textScrollCheck = false;
+  bool _logoCheck = false;
+  bool _bannerCheck = false;
   String _selectedScrollOption =
       'IMAGE'; // Default selected option for the group
   late var fontSizes;
@@ -82,6 +85,8 @@ class _WelcomePageState extends State<ConfigPage>
     actKey: '',
     actAllow: '',
     actStatus: '',
+    logoEnable: '',
+    bannerEnable: '',
     imageScroll: '',
     priceDisplay: '',
     imageDisplay: '',
@@ -99,6 +104,9 @@ class _WelcomePageState extends State<ConfigPage>
     'actCode': '',
   };
   late String appVersion = '';
+  bool isGenerated = false;
+  bool writeToServer = false;
+  final priceSpeaker = PriceSpeaker();
 
   @override
   initState() {
@@ -129,6 +137,15 @@ class _WelcomePageState extends State<ConfigPage>
     _focusNodeActivation?.dispose();
     animationController.dispose(); // Properly dispose of the AnimationController
     super.dispose();
+  }
+
+  void _clearControllers() {
+    setState(() {
+      ipAddressController.clear();
+      portNoController.clear();
+      clientIDController.clear();
+      activationController.clear();
+    });
   }
 
   void _hideSystemBars() {
@@ -477,6 +494,7 @@ class _WelcomePageState extends State<ConfigPage>
   Widget _initButton() {
     return InkWell(
       onTap: () async {
+
         _addStatusMessage('INIT BUTTON PRESSED');
       },
       child: Container(
@@ -521,6 +539,7 @@ class _WelcomePageState extends State<ConfigPage>
                     try {
                       if(await dbProvider.deleteApiData()) {
                         _addStatusMessage('DATABASE DELETION IS IN PROGRESS.');
+                        _clearControllers();
                       }else{
                         _addStatusMessage('DATABASE DELETION FAILURE.');
                       }
@@ -660,60 +679,61 @@ class _WelcomePageState extends State<ConfigPage>
   Widget _requestBTN() {
     return InkWell(
       onTap: () async {
-          if ((apiData.clientID != null && apiData.actCode != null) &&
-              (apiData.clientID != '' && apiData.actCode != '')) {
-            _addStatusMessage('TERMINAL REGISTERED...');
+        if ((apiData.clientID != null && apiData.actCode != null) &&
+            (apiData.clientID != '' && apiData.actCode != '')) {
+          _addStatusMessage('TERMINAL REGISTERED...');
+          setState(() {
+            registerAllow = false; // Disable registration
+          });
+          _apiHelper = ApiHelper();
+          _apiHelper.initializeDio(
+              ipAddressController.text, portNoController.text);
+          if (await _apiHelper.testConnectivity()) {
+            _addStatusMessage('SERVER CONNECTED...');
+            Map<String, dynamic> payload = {
+              "TERMINAL_SERIAL": apiData.clientID,
+              "RANDOM_ID": apiData.actCode,
+              "STATUS": apiData.actStatus.toString(),
+              "CREATED_DATE": apiData.dateTime != null &&
+                  apiData.dateTime.isNotEmpty
+                  ? apiData.dateTime
+                  : _getCurrentDateTime(),
+              "UPDATED_DATE": _getCurrentDateTime(),
+            };
+            var result = await _apiHelper.updateTerminalDetailsTServer(payload);
             setState(() {
-              registerAllow = false;
+              writeToServer = true;
             });
-            _apiHelper = ApiHelper();
-            _apiHelper.initializeDio(
-                ipAddressController.text, portNoController.text);
-            if (await _apiHelper.testConnectivity()) {
-              _addStatusMessage('SERVER CONNECTED...');
-              Map<String, dynamic> payload = {
-                "TERMINAL_SERIAL": apiData.clientID,
-                "RANDOM_ID": apiData.actCode,
-                // "ACTIVATION_CODE": apiData.actKey,
-                "STATUS": apiData.actStatus.toString(),
-                "CREATED_DATE": apiData.dateTime != null &&
-                    apiData.dateTime.isNotEmpty
-                    ? apiData.dateTime
-                    : _getCurrentDateTime(),
-                "UPDATED_DATE": _getCurrentDateTime(), // Set to null initially
-                // "ACTIVATED_DATE": apiData.dateTime // Set to null initially
-              };
-              var result = (await _apiHelper.updateTerminalDetailsTServer(
-                  payload));
-              _addStatusMessage(result!);
-            } else {
-              _addStatusMessage('SERVER CONNECTION FAILED...');
-            }
+            _addStatusMessage(result ?? 'No result from server.');
           } else {
-            _addStatusMessage('NO REGISTRATION DATA FOUND...');
-            _addStatusMessage('GENERATING KEY VALUES...');
-            _getActivationLogic();
-            if(await saveData()) {
+            _addStatusMessage('SERVER CONNECTION FAILED...');
+          }
+        } else {
+          _addStatusMessage('NO REGISTRATION DATA FOUND...');
+          Logger.log('NO REGISTRATION DATA FOUND...', level: LogLevel.info);
+          _addStatusMessage('GENERATING KEY VALUES...');
+          Logger.log('GENERATING KEY VALUES...', level: LogLevel.info);
+          if (await _getActivationLogic()) {
+            if (await saveData()) {
               loadDbData();
             }
-            // setState(() {
-            //   registerAllow = true;
-            // });
           }
+        }
       },
       child: Container(
         width: MediaQuery.of(context).size.width / 2.5,
         height: 50,
         alignment: Alignment.center,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.all(Radius.circular(10)),
-          color: Colors.green,
+          color: Colors.green, // Change color when disabled
         ),
         child: Text(
-          'REQUEST',
+          isGenerated ? 'REQUEST' : 'GENERATE',
           style: TextStyle(
-              fontSize: fontSizes.baseFontSize,
-              color: Colors.black), // Adjusted font size to match others
+            fontSize: fontSizes.baseFontSize,
+            color: Colors.black,
+          ),
         ),
       ),
     );
@@ -724,27 +744,24 @@ class _WelcomePageState extends State<ConfigPage>
       onTap: () async {
         _apiHelper = ApiHelper();
         _apiHelper.initializeDio(ipAddressController.text, portNoController.text);
-        if(await _apiHelper.testConnectivity()){
+        if (await _apiHelper.testConnectivity()) {
           _addStatusMessage('SERVER CONNECTED...');
           Map<String, dynamic> payload = {
             "TERMINAL_SERIAL": apiData.clientID,
-            "RANDOM_ID": apiData.actCode
+            "RANDOM_ID": apiData.actCode,
           };
-          var result = (await _apiHelper.getActivationDetailsFromServer(payload));
-          if(result!='NA' && result!='ERROR'){
+          // Fetch activation details from server
+          var activationResult = await _apiHelper.getActivationDetailsFromServer(payload);
+          if (activationResult != 'NA' && activationResult != 'ERROR') {
             _addStatusMessage('ACTIVATION DATA RECEIVED...');
             _addStatusMessage('PROCESSING ACTIVATION DATA...');
             formData['clientID'] = clientIDController.text;
             formData['actCode'] = activationController.text;
             String queryString = convertToQueryString(formData);
-            String payload = AES.encryptAES(queryString);
-            if(result == payload){
-              setState(() {
-                apiData.actStatus='true';
-                apiData.actAllow='false';
-                apiData.dateTime=_getCurrentDateTime();
-              });
-              Map<String, dynamic> payload = {
+            String encryptedPayload = AES.encryptAES(queryString);
+            if (activationResult == encryptedPayload) {
+              // Prepare payload for updating terminal details
+              Map<String, dynamic> updatePayload = {
                 "TERMINAL_SERIAL": apiData.clientID,
                 "RANDOM_ID": apiData.actCode,
                 "ACTIVATION_CODE": apiData.actKey,
@@ -752,24 +769,36 @@ class _WelcomePageState extends State<ConfigPage>
                 "UPDATED_DATE": _getCurrentDateTime(), // Set to null initially
                 "ACTIVATED_DATE": apiData.dateTime // Set to null initially
               };
-              var result = (await _apiHelper.updateTerminalDetailsTServer(
-                  payload));
-              _addStatusMessage(result!);
+              // Call update terminal details
+              var updateResult = await _apiHelper.updateTerminalDetailsTServer(updatePayload); // Renamed result to updateResult
+              _addStatusMessage(updateResult!);
               Logger.log('DEVICE ACTIVATED...', level: LogLevel.info);
               _addStatusMessage('DEVICE ACTIVATED...');
+              setState(() {
+                apiData.actStatus = 'true';
+                apiData.actAllow = 'false';
+                apiData.dateTime = _getCurrentDateTime();
+                apiData.actKey = activationResult!; // Use activationResult instead of result
+              });
               _addStatusMessage('SAVE DETAILS...');
-              if(await saveData()) {
-                loadDbData();
+              if (await saveData()) {
+                Logger.log('***********************************************************', level: LogLevel.info);
+                Logger.log(apiData.actStatus, level: LogLevel.info);
+                Logger.log('***********************************************************', level: LogLevel.info);
               }
             }
-            else{
+            else {
+              setState(() {
+                apiData.actStatus = 'false';
+                apiData.actAllow = 'false';
+              });
               Logger.log('ACTIVATION FAILED...', level: LogLevel.error);
               _addStatusMessage('ACTIVATION FAILED...');
             }
-          }else{
+          } else {
             _addStatusMessage('ACTIVATION ERROR.');
           }
-        }else{
+        } else {
           _addStatusMessage('SERVER CONNECTION FAILED...');
         }
       },
@@ -784,8 +813,9 @@ class _WelcomePageState extends State<ConfigPage>
         child: Text(
           'ACTIVATE',
           style: TextStyle(
-              fontSize: fontSizes.baseFontSize,
-              color: Colors.black), // Adjusted font size to match others
+            fontSize: fontSizes.baseFontSize,
+            color: Colors.black,
+          ), // Adjusted font size to match others
         ),
       ),
     );
@@ -864,7 +894,15 @@ class _WelcomePageState extends State<ConfigPage>
               _textScroll(),
             ],
           ),
-          if (_selectedScrollOption == 'IMAGE')
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              _enableLogo(),
+              _enableBanner(),
+            ],
+          ),
+          // if (_selectedScrollOption == 'IMAGE')
           Row(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -952,6 +990,54 @@ class _WelcomePageState extends State<ConfigPage>
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _enableLogo() {
+    return Container(
+      width: MediaQuery.of(context).size.width / 7.5,
+      alignment: Alignment.center,
+      child: CheckboxListTile(
+        value: _logoCheck, // The current state (selected or not)
+        onChanged: (bool? newValue) {
+          setState(() {
+            _logoCheck = newValue ?? false; // Toggle the selection
+            apiData.logoEnable = _logoCheck.toString().toLowerCase();
+          });
+        },
+        title: Text(
+          'LOGO',
+          style:
+          TextStyle(fontSize: fontSizes.baseFontSize, color: Colors.blue),
+        ),
+        controlAffinity:
+        ListTileControlAffinity.leading, // Checkbox on the left
+        contentPadding: EdgeInsets.zero, // Remove extra padding
+      ),
+    );
+  }
+
+  Widget _enableBanner() {
+    return Container(
+      width: MediaQuery.of(context).size.width / 7.5,
+      alignment: Alignment.center,
+      child: CheckboxListTile(
+        value: _bannerCheck, // The current state (selected or not)
+        onChanged: (bool? newValue) {
+          setState(() {
+            _bannerCheck = newValue ?? false; // Toggle the selection
+            apiData.bannerEnable = _bannerCheck.toString().toLowerCase();
+          });
+        },
+        title: Text(
+          'BANNER',
+          style:
+          TextStyle(fontSize: fontSizes.baseFontSize, color: Colors.blue),
+        ),
+        controlAffinity:
+        ListTileControlAffinity.leading, // Checkbox on the left
+        contentPadding: EdgeInsets.zero, // Remove extra padding
       ),
     );
   }
@@ -1113,16 +1199,32 @@ class _WelcomePageState extends State<ConfigPage>
       if (portNoController.text != null && portNoController.text != '') {
         if (currencyCodes != null && currencyCodes != '') {
           if (voiceCodes != null && voiceCodes != '') {
-              if (voiceCodes != null && voiceCodes != '') {
-                if (clientIDController.text != null && clientIDController.text != '') {
-                  if (activationController.text != null && activationController.text != '') {
-                  return true;
-                }
+            if (clientIDController.text != null && clientIDController.text != '') {
+              if (activationController.text != null && activationController.text != '') {
+                return true;
+              } else {
+                _addStatusMessage('ACTIVATION CODE IS NOT VALID...');
+                Logger.log('ACTIVATION CODE IS NOT VALID...', level: LogLevel.error);
               }
+            } else {
+              _addStatusMessage('CLIENT ID IS NOT VALID...');
+              Logger.log('CLIENT ID IS NOT VALID...', level: LogLevel.error);
             }
+          } else {
+            _addStatusMessage('VOICE CODE IS NOT VALID...');
+            Logger.log('VOICE CODE IS NOT VALID...', level: LogLevel.error);
           }
+        } else {
+          _addStatusMessage('CURRENCY CODE IS NOT VALID...');
+          Logger.log('CURRENCY CODE IS NOT VALID...', level: LogLevel.error);
         }
+      } else {
+        _addStatusMessage('PORT NUMBER IS NOT VALID...');
+        Logger.log('PORT NUMBER IS NOT VALID...', level: LogLevel.error);
       }
+    } else {
+      _addStatusMessage('IP ADDRESS IS NOT VALID...');
+      Logger.log('IP ADDRESS IS NOT VALID...', level: LogLevel.error);
     }
     return false;
   }
@@ -1144,13 +1246,13 @@ class _WelcomePageState extends State<ConfigPage>
       _imgScrollDuration = int.parse(apiData.imageDisplay);
       _priceDisplayDuration = int.parse(apiData.priceDisplay);
       actStatus = apiData.actStatus.toLowerCase() == 'true';
+      _logoCheck = apiData.logoEnable.toLowerCase() == 'true';
+      _bannerCheck = apiData.bannerEnable.toLowerCase() == 'true';
       if(_imgScrollCheck){
         _selectedScrollOption = 'IMAGE';
-        Logger.log('_selectedScrollOption = IMAGE', level: LogLevel.info);
       }
       else if(_videoScrollCheck){
         _selectedScrollOption = 'VIDEO';
-        Logger.log('_selectedScrollOption = VIDEO', level: LogLevel.info);
       }
       else(_textScrollCheck){
           Logger.log('TEXT SCROLL = ${_textScrollCheck}', level: LogLevel.info);
@@ -1238,26 +1340,38 @@ class _WelcomePageState extends State<ConfigPage>
     return data;
   }
 
-  void _getActivationLogic() async{
-    clientIDController.text = await getAndroidMacAddress();
-    int idLength = 30 - (clientIDController.text).length;
-    activationController.text = randomID(idLength);
-    formData['clientID'] = clientIDController.text;
-    formData['actCode'] = activationController.text;
-    String queryString = convertToQueryString(formData);
-    String payload = AES.encryptAES(queryString);
-    String decryptData = AES.decryptAES(payload);
-    Map<String, String> jsonMap = convertQueryStringToJson(decryptData);
-    String jsonOutput = jsonEncode(jsonMap);
-    Logger.log('ENCRYPTED DATA: $payload', level: LogLevel.info);
-    Logger.log('DECRYPTED DATA: $decryptData', level: LogLevel.info);
-    Logger.log('JSON OUTPUT: $jsonOutput', level: LogLevel.info);
-    setState(() {
-      apiData.clientID=formData['clientID']!;
-      apiData.actCode=formData['actCode']!;
-      apiData.actAllow = registerAllow ? "1" : "0"; // Assigns "1" if true, "0" if false
-      apiData.actKey=payload;
-    });
+  Future<bool> _getActivationLogic() async{
+    try {
+      clientIDController.text = await getAndroidMacAddress();
+      int idLength = 30 - (clientIDController.text).length;
+      activationController.text = randomID(idLength);
+      formData['clientID'] = clientIDController.text;
+      formData['actCode'] = activationController.text;
+      String queryString = convertToQueryString(formData);
+      String payload = AES.encryptAES(queryString);
+      String decryptData = AES.decryptAES(payload);
+      Map<String, String> jsonMap = convertQueryStringToJson(decryptData);
+      String jsonOutput = jsonEncode(jsonMap);
+      Logger.log('ENCRYPTED DATA: $payload', level: LogLevel.info);
+      Logger.log('DECRYPTED DATA: $decryptData', level: LogLevel.info);
+      Logger.log('JSON OUTPUT: $jsonOutput', level: LogLevel.info);
+      setState(() {
+        isGenerated = true;
+        apiData.clientID = formData['clientID']!;
+        apiData.actCode = formData['actCode']!;
+        apiData.actAllow = 'false';
+        registerAllow ? "1" : "0"; // Assigns "1" if true, "0" if false
+        apiData.actKey = payload;
+      });
+      return true;
+    }catch(e){
+      setState(() {
+        isGenerated = false;
+      });
+      _addStatusMessage('KEY VALUE GENERATION ERROR...${e.toString()}');
+      Logger.log('KEY VALUE GENERATION ERROR...${e.toString()}', level: LogLevel.error);
+      return false;
+    }
   }
 
   void scaffoldMsg(BuildContext context, String msg, fontSizes) {
@@ -1311,7 +1425,7 @@ class _WelcomePageState extends State<ConfigPage>
       apiData.portNo = portNoController.text;
       apiData.currency = _selectedCurrency ?? '';
       apiData.voice = _selectedVoice ?? '';
-      apiData.clientID = clientIDController.text;
+      // apiData.clientID = clientIDController.text;
       apiData.actCode = activationController.text;
       apiData.priceDisplay = _priceDisplayDuration.toString();
       apiData.imageDisplay = _imgScrollDuration.toString();
@@ -1348,21 +1462,85 @@ class _WelcomePageState extends State<ConfigPage>
   }
 
   bool _areAllFieldsPopulated() {
-    return apiData.serverIP.isNotEmpty &&
-        apiData.portNo.isNotEmpty &&
-        apiData.currency.isNotEmpty &&
-        apiData.voice.isNotEmpty &&
-        apiData.clientID.isNotEmpty &&
-        apiData.actCode.isNotEmpty &&
-        apiData.priceDisplay.isNotEmpty &&
-        apiData.imageDisplay.isNotEmpty &&
-        apiData.imageScroll.isNotEmpty &&
-        apiData.videoScroll.isNotEmpty &&
-        apiData.textScroll.isNotEmpty &&
-        apiData.actStatus.isNotEmpty &&
-        apiData.actKey.isNotEmpty &&
-        apiData.actAllow.isNotEmpty &&
-        apiData.dateTime.isNotEmpty;
+    if (apiData.serverIP.isEmpty) {
+      _addStatusMessage('SERVER IP IS NOT POPULATED...');
+      Logger.log('SERVER IP IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+    if (apiData.portNo.isEmpty) {
+      _addStatusMessage('PORT NUMBER IS NOT POPULATED...');
+      Logger.log('PORT NUMBER IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+    if (apiData.currency.isEmpty) {
+      _addStatusMessage('CURRENCY CODE IS NOT POPULATED...');
+      Logger.log('CURRENCY CODE IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+    if (apiData.voice.isEmpty) {
+      _addStatusMessage('VOICE CODE IS NOT POPULATED...');
+      Logger.log('VOICE CODE IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+    if (apiData.clientID.isEmpty) {
+      _addStatusMessage('CLIENT ID IS NOT POPULATED...');
+      Logger.log('CLIENT ID IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+    if (apiData.actCode.isEmpty) {
+      _addStatusMessage('ACTIVATION CODE IS NOT POPULATED...');
+      Logger.log('ACTIVATION CODE IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+    if (apiData.priceDisplay.isEmpty) {
+      _addStatusMessage('PRICE DISPLAY IS NOT POPULATED...');
+      Logger.log('PRICE DISPLAY IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+    if (apiData.imageDisplay.isEmpty) {
+      _addStatusMessage('IMAGE DISPLAY IS NOT POPULATED...');
+      Logger.log('IMAGE DISPLAY IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+    if (apiData.imageScroll.isEmpty) {
+      _addStatusMessage('IMAGE SCROLL IS NOT POPULATED...');
+      Logger.log('IMAGE SCROLL IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+    if (apiData.videoScroll.isEmpty) {
+      _addStatusMessage('VIDEO SCROLL IS NOT POPULATED...');
+      Logger.log('VIDEO SCROLL IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+    if (apiData.textScroll.isEmpty) {
+      _addStatusMessage('TEXT SCROLL IS NOT POPULATED...');
+      Logger.log('TEXT SCROLL IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+    if (apiData.actStatus.isEmpty) {
+      _addStatusMessage('ACTIVATION STATUS IS NOT POPULATED...');
+      Logger.log('ACTIVATION STATUS IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+    if (apiData.actKey.isEmpty) {
+      _addStatusMessage('ACTIVATION KEY IS NOT POPULATED...');
+      Logger.log('ACTIVATION KEY IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+    if (apiData.actAllow.isEmpty) {
+      _addStatusMessage('ACTIVATION ALLOWANCE IS NOT POPULATED...');
+      Logger.log('ACTIVATION ALLOWANCE IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+    if (apiData.dateTime.isEmpty) {
+      _addStatusMessage('DATE AND TIME IS NOT POPULATED...');
+      Logger.log('DATE AND TIME IS NOT POPULATED...', level: LogLevel.info);
+      return false;
+    }
+
+    Logger.log('SAVING DATA TO DATABASE...', level: LogLevel.info);
+    _addStatusMessage('SAVING DATA TO DATABASE...');
+    return true;
   }
 
   @override

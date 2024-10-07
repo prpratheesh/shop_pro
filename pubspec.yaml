@@ -2,7 +2,7 @@ name: shop_pro
 description: "A new Flutter project."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 1.0.0+1
+version: 1.0.0+4
 
 environment:
   sdk: '>=3.4.3 <4.0.0'
@@ -30,11 +30,18 @@ dependencies:
   crypto: ^3.0.5
   encrypt: ^5.0.3
   pointycastle: ^3.9.1
+  syncfusion_flutter_barcodes: ^27.1.51
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.14.1
   flutter_lints: ^3.0.0
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon.png"
 
 flutter:
   uses-material-design: true
@@ -66,8 +73,3 @@ flutter_native_splash:
   android: true  # Enable for Android
   ios: true  # Enable for iOS
   fullscreen: true  # Make splash screen fullscreen
-
-flutter_icons:
-  android: true
-  ios: true
-  image_path: "assets/images/app_icon.png"

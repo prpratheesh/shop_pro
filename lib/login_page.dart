@@ -59,6 +59,9 @@ class _LoginPageState extends State<LoginPage> {
   bool overlay_show = false;
   int imageDuration = 5;
   int displayDuration = 5;
+  bool bannerEnable = false;
+  bool logoEnable = false;
+  Uint8List? _logoImageData; // Variable to hold the logo image data
 
   @override
   void initState() {
@@ -75,6 +78,8 @@ class _LoginPageState extends State<LoginPage> {
       setState(() {
         imageDuration = int.parse(apiData.imageDisplay);
         displayDuration = int.parse(apiData.priceDisplay);
+        bannerEnable = apiData.bannerEnable.toLowerCase() == 'true';
+        logoEnable = apiData.logoEnable.toLowerCase() == 'true';
         Logger.log('TIMER DATA LOADED : $imageDuration $displayDuration', level: LogLevel.info);
       });
       _imageScrollTimer = Timer.periodic(Duration(seconds: imageDuration), (Timer timer) {
@@ -141,6 +146,19 @@ class _LoginPageState extends State<LoginPage> {
         imageLoadComplete = true;
       });
       Logger.log('IMAGE URLS LENGTH = ${imageUrls.length}', level: LogLevel.info);
+
+      // Call to fetch the logo image
+      final logoBytes = await _apiHelper.fetchLogo(); // Fetch logo
+      if (logoBytes != null) {
+        Logger.log('LOGO FETCHED SUCCESSFULLY, SIZE: ${logoBytes.length} bytes', level: LogLevel.info);
+        // Store the logo bytes in a variable
+        // Assuming you have a variable declared like this:
+        _logoImageData = logoBytes; // Create this variable in your class to hold logo data
+      } else {
+        Logger.log('FAILED TO FETCH LOGO.', level: LogLevel.error);
+        _logoImageData = null; // Reset logo data if fetching failed
+      }
+
       for (String imageName in imageUrls) {
         _handleImageDownload(imageName);
       }
@@ -343,7 +361,7 @@ class _LoginPageState extends State<LoginPage> {
     });
   }
 
-  void _showOverlay(BarcodeData message) {
+  void _showOverlay(BarcodeData message) async{
     // Remove any existing overlay before showing a new one
     if(message.barcode!='' || message.barcode!=null) {
       if (message.barcode != 'STATUS429' &&
@@ -352,11 +370,23 @@ class _LoginPageState extends State<LoginPage> {
           overlay_show = true;
         });
         _removeOverlay();
-        priceSpeaker.speakPrice(message.retail);
+        if(apiData.voice=='VOICE1') {
+          priceSpeaker.speakPrice(message.retail);
+        }else{
+          priceSpeaker.speakPriceText(message.retail);
+        }
         Logger.log('PRICE DISPLAY STARTING FOR $displayDuration SECONDS', level: LogLevel.info);
         final overlay = Overlay.of(context);
+        // Determine the logo to display
+        Uint8List? logoData = _logoImageData; // Use network logo if available
+        logoData ??= (await rootBundle.load('assets/images/Logo.jpg')).buffer.asUint8List();
         _overlayEntry = OverlayEntry(
-          builder: (context) => TemporaryOverlay(message: message, duration: Duration(seconds: displayDuration)),
+          builder: (context) => TemporaryOverlay(
+            message: message,
+            duration: Duration(seconds: displayDuration),
+            showLogo: logoEnable, // Pass the logoEnable boolean
+            logoData: logoData, // Pass logo data to TemporaryOverlay
+          ),
         );
         overlay.insert(_overlayEntry!);
         // Automatically remove the overlay after 5 seconds and update the state
@@ -500,7 +530,7 @@ class _LoginPageState extends State<LoginPage> {
           duration: const Duration(seconds: 1), // Animation duration
           child: Container(
             key: ValueKey<int>(_currentImageIndex), // Unique key for the current image
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            // padding: const EdgeInsets.symmetric(horizontal: 20),
             height: MediaQuery.of(context).size.height,
             width: MediaQuery.of(context).size.width,
             decoration: BoxDecoration(
@@ -521,9 +551,9 @@ class _LoginPageState extends State<LoginPage> {
                     spreadRadius: 2)
               ],
               gradient: const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.blue, Colors.purple]
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.blue, Colors.purple],
               ),
             ),
             child: Column(
@@ -535,15 +565,29 @@ class _LoginPageState extends State<LoginPage> {
                   padding: const EdgeInsets.only(bottom: 50.0), // Optional: Add padding for spacing from the bottom
                   child: _barcodeScanner(fontSizes), // Place the barcode scanner at the bottom
                 ),
+                // Conditionally display the banner
+                Visibility(
+                  visible: bannerEnable, // Banner visibility based on bannerEnable
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Container(
+                      color: Colors.black.withOpacity(0.7), // Banner background color
+                      height: MediaQuery.of(context).size.height/10,
+                      width: MediaQuery.of(context).size.width,
+                      child: Center(
+                        child: Text(
+                          'Scan Your Price Here',
+                          style: TextStyle(color: Colors.white, fontSize: fontSizes.largerFontSize8), // Use fontSizes for consistency
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ),
       ),
-      // floatingActionButton: FloatingActionButton(
-      //   onPressed: _changeImage, // Change the image when pressed
-      //   child: const Icon(Icons.refresh),
-      // ),
     );
   }
 

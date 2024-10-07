@@ -177,6 +177,30 @@ class ApiHelper {
       return 'ERROR';
     }
   }
+
+  Future<Uint8List?> fetchLogo() async {
+    Logger.log('FETCHING LOGO FROM $_baseUrl.', level: LogLevel.debug);
+    try {
+      // Adjust the endpoint to match your API route for fetching the logo
+      final response = await _dio.get('/logo', options: Options(responseType: ResponseType.bytes));
+
+      Logger.log(
+          'RESPONSE STATUS = ${response.statusCode.toString().toUpperCase()}.',
+          level: LogLevel.debug);
+
+      if (response.statusCode == 200) {
+        // Assuming the response contains the logo image bytes
+        Logger.log('LOGO FETCHED SUCCESSFULLY.', level: LogLevel.debug);
+        return response.data; // Return the image bytes
+      } else {
+        Logger.log('FAILED TO FETCH LOGO.', level: LogLevel.error);
+        return null;
+      }
+    } catch (e) {
+      Logger.log('EXCEPTION OCCURRED WHILE FETCHING LOGO. ${e.toString().toUpperCase()}', level: LogLevel.error);
+      return null;
+    }
+  }
 }
 
 // Future<Uint8List> downloadImage(String imageName) async {

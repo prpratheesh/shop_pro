@@ -20,6 +20,13 @@ class PriceSpeaker {
     });
   }
 
+  Future<String> getAvailableVoices() async {
+    List<dynamic> voices = await flutterTts.getVoices;
+    String voiceList = voices.join(', '); // Join voices with a comma and space
+    print(voiceList); // Print the list of voices for debugging
+    return voiceList; // Return the list of voices as a string
+  }
+
   // Function to set the voice
   Future<void> setVoice(String language) async {
     await flutterTts.setLanguage(language);
@@ -34,6 +41,13 @@ class PriceSpeaker {
   Future<void> speakPrice(double retailPrice) async {
     String formattedPrice = formatPrice(retailPrice);
     await flutterTts.speak(formattedPrice);
+    // await flutterTts.speak(formattedPrice.replaceAll('.', '')); // Ensure no dots are included
+  }
+
+  // Function to speak the price
+  Future<void> speakPriceText(double retailPrice) async {
+    String formattedPrice = formatPriceToText(retailPrice); // Get the formatted price in words
+    await flutterTts.speak(formattedPrice); // Speak the formatted price
   }
 
   // Function to speak a custom message
@@ -42,15 +56,108 @@ class PriceSpeaker {
   }
 
   // Helper to format the price into words
+  // String formatPrice(double price) {
+  //   int dirham = price.floor();
+  //   int fills = ((price - dirham) * 100).round();
+  //
+  //   if (fills > 0) {
+  //     return '$dirham Dr-ham ${fills} Fills';
+  //   } else {
+  //     return '$dirham Dr-ham';
+  //   }
+  // }
+  // String formatPrice(double price) {
+  //   int dirham = price.floor();
+  //   int fills = ((price - dirham) * 100).round();
+  //
+  //   // Create the formatted string
+  //   String formattedPrice = '$dirham Dr-ham';
+  //   if (fills > 0) {
+  //     formattedPrice += ' $fills Fills'; // Use space instead of dot
+  //   }
+  //
+  //   return formattedPrice;
+  // }
   String formatPrice(double price) {
-    int dirham = price.floor();
-    int fills = ((price - dirham) * 100).round();
+    int dirham = price.floor(); // Extract the Dirham part (whole number)
+    int fills = ((price - dirham) * 100).round(); // Extract the exact Fils part without rounding
 
+    // Create the formatted string
+    String formattedPrice = '$dirham Dr-ham'; // Ensure no dots are included
     if (fills > 0) {
-      return '$dirham Dr-ham ${fills} Fills';
-    } else {
-      return '$dirham Dr-ham';
+      formattedPrice += ' $fills Fills'; // Add fills only if present
     }
+    print(formattedPrice);
+    return formattedPrice;
   }
+
+  String formatPriceToText(double price) {
+    int dirham = price.floor(); // Extract the Dirham part (whole number)
+    int fills = ((price - dirham) * 100).round(); // Extract the exact Fils part without rounding
+
+    // Convert numbers to words
+    String dirhamText = convertNumberToWords(dirham);
+    String fillsText = fills > 0 ? ' ${convertNumberToWords(fills)} Fills' : '';
+
+    // Create the formatted string
+    String formattedPrice = '$dirhamText Dirham$fillsText'; // Construct the message
+    print(formattedPrice);
+    return formattedPrice;
+  }
+
+// Helper function to convert numbers to words
+  String convertNumberToWords(int number) {
+    if (number == 0) return "Zero";
+    const List<String> units = [
+      '',
+      'One',
+      'Two',
+      'Three',
+      'Four',
+      'Five',
+      'Six',
+      'Seven',
+      'Eight',
+      'Nine',
+      'Ten',
+      'Eleven',
+      'Twelve',
+      'Thirteen',
+      'Fourteen',
+      'Fifteen',
+      'Sixteen',
+      'Seventeen',
+      'Eighteen',
+      'Nineteen',
+    ];
+
+    const List<String> tens = [
+      '',
+      '',
+      'Twenty',
+      'Thirty',
+      'Forty',
+      'Fifty',
+      'Sixty',
+      'Seventy',
+      'Eighty',
+      'Ninety',
+    ];
+
+    if (number < 20) {
+      return units[number];
+    } else if (number < 100) {
+      return tens[number ~/ 10] + (number % 10 != 0 ? ' ${units[number % 10]}' : '');
+    } else if (number < 1000) {
+      return '${units[number ~/ 100]} Hundred${number % 100 != 0 ? ' ${convertNumberToWords(number % 100)}' : ''}';
+    } else if (number < 1000000) { // Handle thousands
+      return '${convertNumberToWords(number ~/ 1000)} Thousand${number % 1000 != 0 ? ' ${convertNumberToWords(number % 1000)}' : ''}';
+    } else if (number < 1000000000) { // Handle millions
+      return '${convertNumberToWords(number ~/ 1000000)} Million${number % 1000000 != 0 ? ' ${convertNumberToWords(number % 1000000)}' : ''}';
+    }
+
+    return number.toString(); // For larger numbers, fallback to string representation
+  }
+
 }
 

@@ -46,6 +46,8 @@ class DBProvider {
               "ActKey TEXT NOT NULL,"
               "ActAllow TEXT NOT NULL DEFAULT 0,"
               "ActStatus TEXT NOT NULL DEFAULT 0,"
+              "LogoEnable TEXT NOT NULL DEFAULT false,"
+              "BannerEnable TEXT NOT NULL DEFAULT false,"
               "ImageScroll TEXT NOT NULL,"
               "PriceDisplay TEXT NOT NULL DEFAULT 3,"//TIMER FOR PRICE DISPLAY
               "ImageDisplay TEXT NOT NULL DEFAULT 3,"//TIMER FOR IMAGE DISPLAY
@@ -64,7 +66,7 @@ class DBProvider {
           Logger.log('TABLE ERRORLOG CREATED.', level: LogLevel.debug);
         },
       onUpgrade: (db, oldDbVersion, newVersion) async {
-        if (oldDbVersion < 3) {
+        if (oldDbVersion < 4) {
           try {
             // Check if 'PriceDisplay' column exists
             final columnExists = await db.rawQuery(
@@ -94,6 +96,16 @@ class DBProvider {
             if (!columns.contains('ActKey')) {
               await db.execute("ALTER TABLE ApiData ADD COLUMN ActKey TEXT NOT NULL DEFAULT 0");
               Logger.log('ADDED ACTIVATION KEY COLUMN TO API DATA TABLE.', level: LogLevel.debug);
+            }
+
+            if (!columns.contains('LogoEnable')) {
+              await db.execute("ALTER TABLE ApiData ADD COLUMN LogoEnable TEXT NOT NULL DEFAULT false");
+              Logger.log('ADDED LOGO ENABLE COLUMN TO API DATA TABLE.', level: LogLevel.debug);
+            }
+
+            if (!columns.contains('BannerEnable')) {
+              await db.execute("ALTER TABLE ApiData ADD COLUMN BannerEnable TEXT NOT NULL DEFAULT false");
+              Logger.log('ADDED BANNER ENABLE COLUMN TO API DATA TABLE.', level: LogLevel.debug);
             }
 
           } catch (e) {

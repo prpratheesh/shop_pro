@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+import 'package:syncfusion_flutter_barcodes/barcodes.dart';
 import 'package:flutter/material.dart';
 import 'package:shop_pro/model_barcode.dart';
 import 'font_sizes.dart';
@@ -6,10 +8,14 @@ class TemporaryOverlay extends StatelessWidget {
   final BarcodeData? message; // Optional BarcodeData
   final String? errorMessage; // Optional error message
   final Duration duration;
+  final bool showLogo; // New parameter to control logo visibility
+  final Uint8List? logoData;
 
   TemporaryOverlay({
-    this.message, // Make it nullable to allow for an error message
+    this.message, // Nullable to allow for an error message
     this.errorMessage, // Allow passing a string message
+    this.showLogo = false, // Default is false if not provided
+    this.logoData,
     Duration? duration,
   }) : duration = duration ?? const Duration(seconds: 5);
 
@@ -45,6 +51,17 @@ class TemporaryOverlay extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              // Conditionally show the logo based on the showLogo parameter
+              if (showLogo && logoData != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Image.memory(
+                    logoData!,
+                    height: screenHeight/5, // Adjust as needed
+                    width: screenWidth/5, // Adjust as needed
+                    fit: BoxFit.contain,
+                  ),
+                ),
               if (message != null) ...[
                 Text(
                   message!.barcode,
@@ -62,6 +79,7 @@ class TemporaryOverlay extends StatelessWidget {
                     color: Colors.blue,
                   ),
                 ), // NAME ENGLISH
+                if (message!.arabic != null && message!.arabic!.trim().isNotEmpty)
                 Text(
                   message!.arabic,
                   style: TextStyle(
@@ -98,6 +116,18 @@ class TemporaryOverlay extends StatelessWidget {
                     ],
                   ),
                 ), // RETAIL CURRENCY, PRICE AND SEPARATOR
+                Center(
+                  child: Container(
+                    height: height/8,
+                width: width/4,
+                child:
+                SfBarcodeGenerator(
+                  value: message?.barcode,
+                  symbology: Code128(),
+                  showValue: true,
+                ),
+                  ),
+                ),
               ] else if (errorMessage != null) ...[
                 Text(
                   errorMessage!,
