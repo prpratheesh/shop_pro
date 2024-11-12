@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -6,9 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart' as barcode_scanner;
+import 'package:mqtt_client/mqtt_client.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:shop_pro/model_barcode.dart';
 import 'package:shop_pro/price_display.dart';
 import 'package:shop_pro/speech.dart';
@@ -26,6 +29,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart'; // For compute
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'mqtt_service.dart';
+import 'package:restart_app/restart_app.dart';
 
 class LoginPage extends StatefulWidget {
   @override
@@ -62,32 +67,96 @@ class _LoginPageState extends State<LoginPage> {
   bool bannerEnable = false;
   bool logoEnable = false;
   Uint8List? _logoImageData; // Variable to hold the logo image data
+  late MqttService mqttService;
+  List<String> _notifications = [];
+  String imageDirName = 'dir1';
+  bool isTimerPaused = false; // Flag to track timer status
+  String receivedMessage = '';
+  int imagesDownloaded = 0; // Counter for downloaded images
+  String old_notification = 'dir1';
 
   @override
   void initState() {
     super.initState();
     priceSpeaker.setVoice("en"); // British English
     priceSpeaker.setSpeechRate(0.5); // Speed at 70%
+    // Access the MqttProvider
     _initialize();
+  }
+
+  @override
+  void dispose() {
+    // SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
+    _barcodeController.removeListener(_handleBarcodeInput);
+    _barcodeController.dispose();
+    _focusNode.dispose();
+    _overlayRemovalTimer?.cancel();
+    _imageScrollTimer?.cancel();
+    mqttService.disconnect();
+    super.dispose();
   }
 
   Future<void> _initialize() async {
     try {
-      await getServerData(); // Ensure server data is fetched and API is initialized
-      await _loadImageNameListFromApi(); // Proceed with image loading
+      await getServerData(); // Fetch server data and initialize API
+      await _loadImageNameListFromApi(imageDirName); // Proceed with loading images
+
+      // Set state variables from API data
       setState(() {
         imageDuration = int.parse(apiData.imageDisplay);
         displayDuration = int.parse(apiData.priceDisplay);
         bannerEnable = apiData.bannerEnable.toLowerCase() == 'true';
         logoEnable = apiData.logoEnable.toLowerCase() == 'true';
-        Logger.log('TIMER DATA LOADED : $imageDuration $displayDuration', level: LogLevel.info);
+        Logger.log('TIMER DATA LOADED: IMAGE TRANSITION IN->$imageDuration, PRICE DISPLAY IN->$displayDuration', level: LogLevel.info);
       });
-      _imageScrollTimer = Timer.periodic(Duration(seconds: imageDuration), (Timer timer) {
-        if (imageUrls.isNotEmpty && imageLoadComplete) {
-          setState(() {
-            _currentImageIndex = (_currentImageIndex + 1) % imageUrls.length;
-          });
-          Logger.log('CURRENT INDEX: $_currentImageIndex', level: LogLevel.info);
+
+      _startImageScrollTimer();
+
+      // Initialize image scrolling timer
+      // _imageScrollTimer = Timer.periodic(Duration(seconds: imageDuration), (Timer timer) {
+      //   if (imageUrls.isNotEmpty && imageLoadComplete) {
+      //     setState(() {
+      //       _currentImageIndex = (_currentImageIndex + 1) % imageUrls.length;
+      //     });
+      //   }
+      // });
+
+      // Initialize MQTT service
+      mqttService = MqttService(
+        broker: apiData.serverIP,
+        clientIdentifier: 'PC_${apiData.clientID}',
+        port: 1883,
+        onNotificationReceived: _handleNotification, // Pass the callback
+      );
+      await initializeMqtt();
+
+      platform.setMethodCallHandler((MethodCall call) async {
+        try {
+          if (call.method == 'onBarcodeScanned') {
+            String barcode = call.arguments as String;
+            setState(() {
+              _opacity = 1.0; // Set opacity to 1 when a barcode is scanned
+              _barcodeController.text = barcode;
+            });
+
+            Logger.log('BARCODE SCANNED: $barcode', level: LogLevel.info);
+
+            if (_isApiInitialized && _apiAvailable) {
+              await barcodeInquire(barcode);
+            } else {
+              Logger.log('PLEASE WAIT. API NOT AVAILABLE.', level: LogLevel.error);
+            }
+
+            // Reduce opacity and clear barcode after display duration
+            Future.delayed(Duration(seconds: displayDuration), () {
+              setState(() {
+                _opacity = 0.0;
+                _barcodeController.text = '';
+              });
+            });
+          }
+        } catch (e) {
+          Logger.log('Error in handling native method call: $e', level: LogLevel.error);
         }
       });
     } catch (e) {
@@ -97,55 +166,105 @@ class _LoginPageState extends State<LoginPage> {
         MaterialPageRoute(builder: (context) => ConfigPage()),
       );
     }
-    platform.setMethodCallHandler((MethodCall call) async {
-      try {
-        if (call.method == 'onBarcodeScanned') {
-          setState(() {
-            _opacity = 1.0; // Set opacity to 1 when a barcode is scanned
-          });
-          String barcode = call.arguments as String;
-          setState(() {
-            _barcodeController.text = barcode;
-          });
-          Logger.log('BARCODE SCANNED $barcode', level: LogLevel.info);
-          if(_isApiInitialized && _apiAvailable) {
-            await barcodeInquire(barcode);
-          }else{
-            Logger.log('PLEASE WAIT. API NOT AVAILABLE.', level: LogLevel.error);
-          }
-          // After barcode is scanned, reduce the opacity to 0 after 2 seconds
-          Future.delayed(Duration(seconds: displayDuration), () {
-            setState(() {
-              _opacity = 0.0;
-              barcode='';
-              _barcodeController.text='';
-            });
-          });
-        }
-      } catch (e) {
-        Logger.log('Error in handling native method call: $e', level: LogLevel.error);
-      }
-    });
   }
 
-  Future<void> _loadImageNameListFromApi() async {
+  Future<void> initializeMqtt() async {
+    mqttService.statusStream.listen((status) {
+      switch (status) {
+        case MqttConnectionStatus.connected:
+        // Handle connected status
+          scaffoldMsg('CONNECTED TO SERVER BROKER');
+          break;
+        case MqttConnectionStatus.disconnected:
+        // Handle disconnected status
+          scaffoldMsg('DISCONNECTED FROM SERVER BROKER');
+          break;
+        case MqttConnectionStatus.error:
+        // Handle error status
+          scaffoldMsg('BROKER CONNECTION ERROR');
+          break;
+      }
+    });
+
+    try {
+      await mqttService.connect();
+      mqttService.messageStream.listen(
+            (List<MqttReceivedMessage<MqttMessage>> messages) async {
+          for (var receivedMessage in messages) {
+            final MqttPublishMessage mqttMessage = receivedMessage.payload as MqttPublishMessage;
+            final String notification = utf8.decode(mqttMessage.payload.message);
+          }
+        },
+        onError: (error) {
+          Logger.log('MQTT BROKER STREAM ERROR: $error', level: LogLevel.critical);
+        },
+      );
+    } catch (e) {
+      Logger.log('MQTT CONNECTION ERROR: $e', level: LogLevel.critical);
+    }
+  }
+
+  Future<void> _handleNotification(notification) async{
+    setState(() {
+      receivedMessage = notification;
+    });
+    if(notification == 'dir1'){
+      _pauseImageScrollTimer();
+      Logger.log('NEW NOTIFICATION RECEIVED: $notification', level: LogLevel.critical);
+      imageDirName = 'dir1';
+      setState(() {
+        _currentImageIndex = 0;
+        imageBytesList.clear();
+      });
+      await _loadImageNameListFromApi(imageDirName);
+      _resumeImageScrollTimer();
+    }else if(notification == 'dir2'){
+      _pauseImageScrollTimer();
+      Logger.log('NEW NOTIFICATION RECEIVED: $notification', level: LogLevel.critical);
+      imageDirName = 'dir2';
+      setState(() {
+        _currentImageIndex = 0;
+        imageBytesList.clear();
+      });
+      await _loadImageNameListFromApi(imageDirName);
+      _resumeImageScrollTimer();
+    }
+  }
+
+  // Future<void> connect() async {
+  //   try {
+  //     await mqttService.connect(['system/notifications']);
+  //     Logger.log('CONNECTED TO MQTT BROKER.', level: LogLevel.info);
+  //   } catch (e) {
+  //     Logger.log('ERROR CONNECTING MQTT BROKER.', level: LogLevel.error);
+  //     mqttService.disconnect();
+  //     Logger.log('MQTT SERVICE DISCONNECTED.', level: LogLevel.error);
+  //     Logger.log(e.toString().toUpperCase(), level: LogLevel.error);
+  //     throw e; // Rethrow the error if needed for handling in the caller
+  //   }
+  // }
+
+  Future<void> _loadImageNameListFromApi(imageDirName) async {
+    int totalImages = 0; // Set this before starting the download process
+    totalImages = 0;
     if (_apiHelper == null) {
       Logger.log('API NOT INITIALIZED, WAITING...', level: LogLevel.info);
       await Future.delayed(const Duration(seconds: 1));
       setState(() {
         _isApiInitialized = false;
       });
-      return _loadImageNameListFromApi(); // Retry after delay
+      return _loadImageNameListFromApi(imageDirName); // Retry after delay
     }
 
     try {
-      final fetchedImages = await _apiHelper.fetchImageNameList();
+      final fetchedImages = await _apiHelper.fetchImageNameList(imageDirName);
       Logger.log('IMAGE LIST FETCHED: $fetchedImages', level: LogLevel.info);
       setState(() {
         imageUrls = fetchedImages ?? ['assets/images/bg1.jpg'];
         imageLoadComplete = true;
       });
-      Logger.log('IMAGE URLS LENGTH = ${imageUrls.length}', level: LogLevel.info);
+      totalImages = imageUrls.length;
+      Logger.log('IMAGE COUNT = $totalImages', level: LogLevel.info);
 
       // Call to fetch the logo image
       final logoBytes = await _apiHelper.fetchLogo(); // Fetch logo
@@ -160,7 +279,7 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       for (String imageName in imageUrls) {
-        _handleImageDownload(imageName);
+        _handleImageDownload(imageDirName, totalImages, imageName);
       }
       setState(() {
         _isApiInitialized = true;
@@ -177,15 +296,35 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  @override
-  void dispose() {
-    // SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
-    _barcodeController.removeListener(_handleBarcodeInput);
-    _barcodeController.dispose();
-    _focusNode.dispose();
-    _overlayRemovalTimer?.cancel();
-    _imageScrollTimer?.cancel();
-    super.dispose();
+  // Function to start the timer
+  void _startImageScrollTimer() {
+    // If the timer is already running, return
+    if (_imageScrollTimer != null && _imageScrollTimer!.isActive) return;
+
+    _imageScrollTimer = Timer.periodic(Duration(seconds: imageDuration), (Timer timer) {
+      if (imageUrls.isNotEmpty && imageLoadComplete && !isTimerPaused) {
+        setState(() {
+          _currentImageIndex = (_currentImageIndex + 1) % imageUrls.length;
+        });
+      }
+    });
+  }
+
+  // Function to pause the timer
+  void _pauseImageScrollTimer() {
+    if (_imageScrollTimer != null) {
+      _imageScrollTimer!.cancel(); // Cancel the timer
+      _imageScrollTimer = null; // Clear the reference
+      isTimerPaused = true; // Set the flag to true
+    }
+  }
+
+  // Function to resume the timer
+  void _resumeImageScrollTimer() {
+    if (isTimerPaused) {
+      isTimerPaused = false; // Reset the pause flag
+      _startImageScrollTimer(); // Restart the timer
+    }
   }
 
   Future<void> _handleMethodCall(MethodCall call) async {
@@ -252,10 +391,15 @@ class _LoginPageState extends State<LoginPage> {
     });
   }
 
-  Future<void> _handleImageDownload(String imageName) async {
+  Future<void> _handleImageDownload(String imageDirName, int totalImages, String imageName) async {
+    setState(() {
+      imagesDownloaded = 0;
+      imageBytesList.clear();
+    });
     try {
       // Bundle the arguments in a Map
       final Map<String, String> args = {
+        'imagePath': imageDirName, // Added imagePath here
         'imageName': imageName,
         'ipAddress': apiData.serverIP ?? '',
         'portNo': apiData.portNo ?? ''
@@ -265,10 +409,12 @@ class _LoginPageState extends State<LoginPage> {
 
       setState(() {
         imageBytesList.add(imageBytes); // Add downloaded image to the list
+        imagesDownloaded++; // Increment the counter for downloaded images
       });
 
-      Logger.log('IMAGE DOWNLOADED SUCCESSFULLY.', level: LogLevel.info);
+      Logger.log('$imagesDownloaded IMAGE DOWNLOADED SUCCESSFULLY OUT OF $totalImages', level: LogLevel.info);
     } catch (e) {
+      Logger.log('IMAGE $imagesDownloaded DOWNLOAD FAILED.', level: LogLevel.error);
       Logger.log('ERROR DOWNLOADING IMAGE: $e', level: LogLevel.error);
     }
   }
@@ -370,9 +516,13 @@ class _LoginPageState extends State<LoginPage> {
           overlay_show = true;
         });
         _removeOverlay();
-        if(apiData.voice=='VOICE1') {
-          priceSpeaker.speakPrice(message.retail);
-        }else{
+        // Logger.log('CURRENCY : ${apiData.currency}', level: LogLevel.error);
+        if(apiData.voice=='VOICE1' && apiData.currency == 'AED') {
+          priceSpeaker.speakPriceAED(message.retail);
+        }else if(apiData.voice=='VOICE1' && apiData.currency == 'OMR'){
+          priceSpeaker.speakPriceOMR(message.retail);
+        }
+        else{
           priceSpeaker.speakPriceText(message.retail);
         }
         Logger.log('PRICE DISPLAY STARTING FOR $displayDuration SECONDS', level: LogLevel.info);
@@ -386,6 +536,7 @@ class _LoginPageState extends State<LoginPage> {
             duration: Duration(seconds: displayDuration),
             showLogo: logoEnable, // Pass the logoEnable boolean
             logoData: logoData, // Pass logo data to TemporaryOverlay
+            currencySymbol: apiData.currency,
           ),
         );
         overlay.insert(_overlayEntry!);
@@ -433,9 +584,28 @@ class _LoginPageState extends State<LoginPage> {
 
   void _onScanCompleted(BarcodeData data) {
     if(!overlay_show) {
-      print('Entered $overlay_show');
+      Logger.log('ENTERED $overlay_show', level: LogLevel.info);
       _showOverlay(data);
     }
+  }
+
+  void scaffoldMsg(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        msg.toString(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 15,
+        ),
+        textAlign: TextAlign.center,
+      ),
+      duration: const Duration(seconds: 2),
+      backgroundColor: Colors.black,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+    ));
   }
 
   @override
@@ -463,6 +633,7 @@ class _LoginPageState extends State<LoginPage> {
                 ],
                 focusNode: _focusNode,
                 autofocus: false,
+                // enabled: false,
                 controller: _barcodeController,
                 style: TextStyle(
                   fontSize: fontSizes.baseFontSize,
@@ -599,12 +770,13 @@ class _LoginPageState extends State<LoginPage> {
 }
 
 Future<Uint8List> downloadImage(Map<String, String> args) async {
+  final String imagePath = args['imagePath']!; // Retrieve imagePath
   final String imageName = args['imageName']!;
   final String ipAddress = args['ipAddress']!;
   final String portNo = args['portNo']!;
 
   final Dio dio = Dio();
-  final String url = 'http://$ipAddress:$portNo/image/$imageName';
+  final String url = 'http://$ipAddress:$portNo/image/$imagePath/$imageName';
 
   try {
     final response = await dio.get<Uint8List>(

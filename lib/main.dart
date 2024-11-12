@@ -6,49 +6,50 @@ import 'package:shop_pro/config_page.dart';
 import 'db_operations.dart';
 import 'logger.dart';
 import 'login_page.dart';
+import 'mqtt_service.dart'; // Import MqttService
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Database
+  Logger.log('APPLICATION STARTED.', level: LogLevel.info);
+  Logger.log('DB SETTINGS STARTED.', level: LogLevel.info);
+  await DBProvider.db.initDB(newVersion: 4);
+  Logger.log('DB SETTINGS COMPLETED.', level: LogLevel.info);
+
+  // Request Permissions
+  Logger.log('PERMISSION SETTINGS STARTED.', level: LogLevel.info);
+  bool permissionsGranted = await requestPermissions();
+  if (!permissionsGranted) {
+    Logger.log('PERMISSIONS NOT GRANTED. Exiting application.', level: LogLevel.error);
+    exit(0); // Exit the app if permissions are not granted
+  }
+  Logger.log('PERMISSION SETTINGS COMPLETED.', level: LogLevel.info);
   runApp(App());
 }
 
-class App extends StatefulWidget {
-  @override
-  State<App> createState() => AppState();
+Future<bool> requestPermissions() async {
+  Logger.log('PERMISSION SETTINGS STARTED.', level: LogLevel.info);
+  // Check the status of both storage and camera permissions
+  final statusStorage = await Permission.storage.status;
+  final statusCamera = await Permission.camera.status;
+  // If both permissions are granted, return true
+  if (statusStorage.isGranted && statusCamera.isGranted) {
+    return true;
+  }
+  // Request both permissions
+  final result = await [
+    Permission.storage,
+    Permission.camera,
+  ].request();
+
+  // Return true if both permissions are granted
+  return result[Permission.storage]?.isGranted == true &&
+      result[Permission.camera]?.isGranted == true;
 }
 
-class AppState extends State<App> {
-  @override
-  void initState() {
-    super.initState();
-    Logger.log('APPLICATION STARTED.', level: LogLevel.info);
-    Logger.log('DB SETTINGS STARTED.', level: LogLevel.info);
-    DBProvider.db.initDB(newVersion: 4);
-    Logger.log('DB SETTINGS COMPLETED.', level: LogLevel.info);
-    requestPermissions();
-    Logger.log('PERMISSION SETTINGS COMPLETED.', level: LogLevel.info);
-  }
-
-  Future<bool> requestPermissions() async {
-    Logger.log('PERMISSION SETTINGS STARTED.', level: LogLevel.info);
-    // Check the status of both storage and camera permissions
-    final statusStorage = await Permission.storage.status;
-    final statusCamera = await Permission.camera.status;
-    // If both permissions are granted, return true
-    if (statusStorage.isGranted && statusCamera.isGranted) {
-      return true;
-    }
-    // Request both permissions
-    final result = await [
-      Permission.storage,
-      Permission.camera,
-    ].request();
-
-    // Return true if both permissions are granted
-    return result[Permission.storage]?.isGranted == true &&
-        result[Permission.camera]?.isGranted == true;
-  }
-
+class App extends StatelessWidget {
+  const App({Key? key}) : super(key: key);
   @override
   Widget build(BuildContext context) {
     // Set preferred orientations for the app
@@ -60,8 +61,8 @@ class AppState extends State<App> {
     return MaterialApp(
       title: "Shop Pro",
       debugShowCheckedModeBanner: false,
-      home: LoginPage(),//LIVE
-      // home: ConfigPage(),//TESTING
+      home: ConfigPage(), // Pass mqttService to LoginPage
+      // home: LoginPage(), // Pass mqttService to LoginPage
     );
   }
 }

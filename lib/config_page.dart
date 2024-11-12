@@ -12,6 +12,7 @@ import 'dart:ui';
 import 'dart:async';
 import 'package:shop_pro/font_sizes.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:shop_pro/secureStorage.dart';
 import 'package:shop_pro/speech.dart';
 import 'aes.dart';
 import 'api_services.dart';
@@ -23,6 +24,7 @@ import 'dart:math' as math;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ConfigPage extends StatefulWidget {
   @override
@@ -107,18 +109,20 @@ class _WelcomePageState extends State<ConfigPage>
   bool isGenerated = false;
   bool writeToServer = false;
   final priceSpeaker = PriceSpeaker();
+  final SecureStorageService _secureStorageService = SecureStorageService();
+  bool secureStorageFlag = false;
+  String secureStorageclientID = '';
+  String secureStorageactCode = '';
+
 
   @override
   initState() {
     super.initState();
-    animationController =
-        AnimationController(duration: const Duration(seconds: 2), vsync: this);
+    animationController = AnimationController(duration: const Duration(seconds: 2), vsync: this);
     animationController.repeat();
     _focusNodeIp = FocusNode();
     _focusNodePort = FocusNode();
-    _getAppVersion();
-    loadDbData();
-    _hideSystemBars();
+    _initializeApp();
   }
 
   @override
@@ -137,6 +141,25 @@ class _WelcomePageState extends State<ConfigPage>
     _focusNodeActivation?.dispose();
     animationController.dispose(); // Properly dispose of the AnimationController
     super.dispose();
+  }
+
+  void _initializeApp() async {
+    await _getSecureStorageData();
+    await _getAppVersion();
+    await _loadDbData();
+    _hideSystemBars();
+  }
+
+  Future<void> _getSecureStorageData() async {
+    // Retrieve clientID and actCode from secure storage
+    var clientID = await _secureStorageService.readData('clientID');
+    var actCode = await _secureStorageService.readData('actCode');
+    // Check if clientID and actCode are non-null and non-empty, and update variables accordingly
+    secureStorageclientID = (clientID != null && clientID.isNotEmpty) ? clientID : '';
+    secureStorageactCode = (actCode != null && actCode.isNotEmpty) ? actCode : '';
+    Logger.log('DATA FROM SECURE STORAGE => secureStorageclientID = $secureStorageclientID secureStorageactCode = $secureStorageactCode', level: LogLevel.critical);
+    // Set secureStorageFlag based on whether both values are valid
+    secureStorageFlag = secureStorageclientID.isNotEmpty && secureStorageactCode.isNotEmpty;
   }
 
   void _clearControllers() {
@@ -356,7 +379,7 @@ class _WelcomePageState extends State<ConfigPage>
     return InkWell(
       onTap: () async {
         if(await saveData()){
-          loadDbData();
+          _loadDbData();
           if(apiData.actStatus=='true') {
             Navigator.pushReplacement(
               context,
@@ -679,45 +702,49 @@ class _WelcomePageState extends State<ConfigPage>
   Widget _requestBTN() {
     return InkWell(
       onTap: () async {
-        if ((apiData.clientID != null && apiData.actCode != null) &&
-            (apiData.clientID != '' && apiData.actCode != '')) {
-          _addStatusMessage('TERMINAL REGISTERED...');
-          setState(() {
-            registerAllow = false; // Disable registration
-          });
-          _apiHelper = ApiHelper();
-          _apiHelper.initializeDio(
-              ipAddressController.text, portNoController.text);
-          if (await _apiHelper.testConnectivity()) {
-            _addStatusMessage('SERVER CONNECTED...');
-            Map<String, dynamic> payload = {
-              "TERMINAL_SERIAL": apiData.clientID,
-              "RANDOM_ID": apiData.actCode,
-              "STATUS": apiData.actStatus.toString(),
-              "CREATED_DATE": apiData.dateTime != null &&
-                  apiData.dateTime.isNotEmpty
-                  ? apiData.dateTime
-                  : _getCurrentDateTime(),
-              "UPDATED_DATE": _getCurrentDateTime(),
-            };
-            var result = await _apiHelper.updateTerminalDetailsTServer(payload);
-            setState(() {
-              writeToServer = true;
-            });
-            _addStatusMessage(result ?? 'No result from server.');
-          } else {
-            _addStatusMessage('SERVER CONNECTION FAILED...');
-          }
-        } else {
-          _addStatusMessage('NO REGISTRATION DATA FOUND...');
-          Logger.log('NO REGISTRATION DATA FOUND...', level: LogLevel.info);
-          _addStatusMessage('GENERATING KEY VALUES...');
-          Logger.log('GENERATING KEY VALUES...', level: LogLevel.info);
-          if (await _getActivationLogic()) {
-            if (await saveData()) {
-              loadDbData();
+        if(apiData.actStatus == 'false' || apiData.actStatus.isEmpty) {
+          if (secureStorageFlag == false) {
+            Logger.log('ACTIVATION DATA NOT FOUND IN SYSTEM...',
+                level: LogLevel.error);
+            _addStatusMessage('ACTIVATION DATA NOT FOUND IN SYSTEM...');
+            await _getActivationLogic();
+            await _getSecureStorageData();
+          } //NO DATA IN SECURE STORAGE
+          else {
+            if (isGenerated == true) {
+              _apiHelper = ApiHelper();
+              _apiHelper.initializeDio(
+                  ipAddressController.text, portNoController.text);
+              if (await _apiHelper.testConnectivity()) {
+                _addStatusMessage('SERVER CONNECTED...');
+                Map<String, dynamic> payload = {
+                  "TERMINAL_SERIAL": apiData.clientID,
+                  "RANDOM_ID": apiData.actCode,
+                  "STATUS": apiData.actStatus.toString(),
+                  "CREATED_DATE": apiData.dateTime != null &&
+                      apiData.dateTime.isNotEmpty
+                      ? apiData.dateTime
+                      : _getCurrentDateTime(),
+                  "UPDATED_DATE": _getCurrentDateTime(),
+                };
+                var result = await _apiHelper.updateTerminalDetailsTServer(
+                    payload);
+                setState(() {
+                  writeToServer = true;
+                });
+                _addStatusMessage(result ?? 'NO RESULT FROM SERVER...');
+              } else {
+                _addStatusMessage('SERVER CONNECTION FAILED...');
+              }
             }
-          }
+            else {
+
+            }
+          } //DATA AVAILABLE IN SECURE STORAGE
+        }
+        else{
+          _addStatusMessage('1 TERMINAL ACTIVATED. OPTION NOT AVAILABLE...');
+          Logger.log('1 TERMINAL ACTIVATED. OPTION NOT AVAILABLE...', level: LogLevel.info);
         }
       },
       child: Container(
@@ -725,8 +752,8 @@ class _WelcomePageState extends State<ConfigPage>
         height: 50,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.all(Radius.circular(10)),
-          color: Colors.green, // Change color when disabled
+          borderRadius: const BorderRadius.all(Radius.circular(10)),
+          color: isGenerated ? Colors.green : Colors.blue, // Change color when disabled
         ),
         child: Text(
           isGenerated ? 'REQUEST' : 'GENERATE',
@@ -742,66 +769,81 @@ class _WelcomePageState extends State<ConfigPage>
   Widget _activate() {
     return InkWell(
       onTap: () async {
-        _apiHelper = ApiHelper();
-        _apiHelper.initializeDio(ipAddressController.text, portNoController.text);
-        if (await _apiHelper.testConnectivity()) {
-          _addStatusMessage('SERVER CONNECTED...');
-          Map<String, dynamic> payload = {
-            "TERMINAL_SERIAL": apiData.clientID,
-            "RANDOM_ID": apiData.actCode,
-          };
-          // Fetch activation details from server
-          var activationResult = await _apiHelper.getActivationDetailsFromServer(payload);
-          if (activationResult != 'NA' && activationResult != 'ERROR') {
-            _addStatusMessage('ACTIVATION DATA RECEIVED...');
-            _addStatusMessage('PROCESSING ACTIVATION DATA...');
-            formData['clientID'] = clientIDController.text;
-            formData['actCode'] = activationController.text;
-            String queryString = convertToQueryString(formData);
-            String encryptedPayload = AES.encryptAES(queryString);
-            if (activationResult == encryptedPayload) {
-              // Prepare payload for updating terminal details
-              Map<String, dynamic> updatePayload = {
-                "TERMINAL_SERIAL": apiData.clientID,
-                "RANDOM_ID": apiData.actCode,
-                "ACTIVATION_CODE": apiData.actKey,
-                "STATUS": 'TRUE',
-                "UPDATED_DATE": _getCurrentDateTime(), // Set to null initially
-                "ACTIVATED_DATE": apiData.dateTime // Set to null initially
-              };
-              // Call update terminal details
-              var updateResult = await _apiHelper.updateTerminalDetailsTServer(updatePayload); // Renamed result to updateResult
-              _addStatusMessage(updateResult!);
-              Logger.log('DEVICE ACTIVATED...', level: LogLevel.info);
-              _addStatusMessage('DEVICE ACTIVATED...');
-              setState(() {
-                apiData.actStatus = 'true';
-                apiData.actAllow = 'false';
-                apiData.dateTime = _getCurrentDateTime();
-                apiData.actKey = activationResult!; // Use activationResult instead of result
-              });
-              _addStatusMessage('SAVE DETAILS...');
-              if (await saveData()) {
-                Logger.log('***********************************************************', level: LogLevel.info);
-                Logger.log(apiData.actStatus, level: LogLevel.info);
-                Logger.log('***********************************************************', level: LogLevel.info);
+        if (apiData.actStatus == 'false' || apiData.actStatus=='') {
+          _apiHelper = ApiHelper();
+          _apiHelper.initializeDio(
+              ipAddressController.text, portNoController.text);
+          if (await _apiHelper.testConnectivity()) {
+            _addStatusMessage('SERVER CONNECTED...');
+            Map<String, dynamic> payload = {
+              "TERMINAL_SERIAL": apiData.clientID,
+              "RANDOM_ID": apiData.actCode,
+            };
+            // Fetch activation details from server
+            var activationResult = await _apiHelper
+                .getActivationDetailsFromServer(payload);
+            if (activationResult != 'NA' && activationResult != 'ERROR') {
+              _addStatusMessage('ACTIVATION DATA RECEIVED...');
+              _addStatusMessage('PROCESSING ACTIVATION DATA...');
+              formData['clientID'] = secureStorageclientID;
+              formData['actCode'] = secureStorageactCode;
+              String queryString = convertToQueryString(formData);
+              String encryptedPayload = AES.encryptAES(queryString);
+              if (activationResult == encryptedPayload) {
+                // Prepare payload for updating terminal details
+                Map<String, dynamic> updatePayload = {
+                  "TERMINAL_SERIAL": apiData.clientID,
+                  "RANDOM_ID": apiData.actCode,
+                  "ACTIVATION_CODE": activationResult,
+                  "STATUS": 'TRUE',
+                  "UPDATED_DATE": _getCurrentDateTime(),
+                  // Set to null initially
+                  "ACTIVATED_DATE": _getCurrentDateTime()
+                  // Set to null initially
+                };
+                // Call update terminal details
+                var updateResult = await _apiHelper
+                    .updateTerminalDetailsTServer(
+                    updatePayload); // Renamed result to updateResult
+                _addStatusMessage(updateResult!);
+                Logger.log('DEVICE ACTIVATED...', level: LogLevel.info);
+                _addStatusMessage('DEVICE ACTIVATED...');
+                setState(() {
+                  apiData.actStatus = 'true';
+                  apiData.actAllow = 'false';
+                  apiData.dateTime = _getCurrentDateTime();
+                  apiData.actKey =
+                  activationResult!; // Use activationResult instead of result
+                });
+                _addStatusMessage('SAVE DETAILS...');
+                if (await saveData()) {
+                  _loadDbData();
+                }
               }
-            }
-            else {
-              setState(() {
-                apiData.actStatus = 'false';
-                apiData.actAllow = 'false';
-              });
-              Logger.log('ACTIVATION FAILED...', level: LogLevel.error);
-              _addStatusMessage('ACTIVATION FAILED...');
+              else {
+                setState(() {
+                  apiData.actStatus = 'false';
+                  apiData.actAllow = 'false';
+                });
+                Logger.log('ACTIVATION FAILED...', level: LogLevel.error);
+                _addStatusMessage('ACTIVATION FAILED...');
+              }
+            } else {
+              _addStatusMessage('ACTIVATION ERROR...');
             }
           } else {
-            _addStatusMessage('ACTIVATION ERROR.');
+            _addStatusMessage('SERVER CONNECTION FAILED...');
           }
-        } else {
-          _addStatusMessage('SERVER CONNECTION FAILED...');
         }
-      },
+        else{
+
+          if (await saveData()) {
+            _loadDbData();
+          }
+          _addStatusMessage('2 TERMINAL ACTIVATED. OPTION NOT AVAILABLE...');
+          Logger.log('2 TERMINAL ACTIVATED. OPTION NOT AVAILABLE...', level: LogLevel.info);
+        }
+        },
       child: Container(
         width: MediaQuery.of(context).size.width / 2.5,
         height: 50,
@@ -881,6 +923,7 @@ class _WelcomePageState extends State<ConfigPage>
           width: 1.0,
         ),
       ),
+      child:  SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -991,6 +1034,7 @@ class _WelcomePageState extends State<ConfigPage>
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -1042,10 +1086,10 @@ class _WelcomePageState extends State<ConfigPage>
     );
   }
 
-  void _getAppVersion() async {
+  Future<void> _getAppVersion() async {
     PackageInfo packageInfo = await PackageInfo.fromPlatform();
     setState(() {
-      appVersion = packageInfo.version+'.'+packageInfo.buildNumber;
+      appVersion = '${packageInfo.version}.${packageInfo.buildNumber}';
     });
   }
 
@@ -1142,15 +1186,19 @@ class _WelcomePageState extends State<ConfigPage>
 
   void _addStatusMessage(String message) {
     String currentTime = DateFormat('hh:mm:ss a').format(DateTime.now());
+
     setState(() {
       statusMessages.add('$currentTime: $message');
     });
+
     Timer(const Duration(milliseconds: 100), () {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 100),
-        curve: Curves.easeOut,
-      );
+      if (_scrollController.hasClients) { // Check if the ScrollController is attached
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 100),
+          curve: Curves.easeOut,
+        );
+      }
     });
   }
 
@@ -1162,16 +1210,17 @@ class _WelcomePageState extends State<ConfigPage>
         setState(() {
           actRandom = false;
         });
-        Logger.log('SERIAL NUMBER OBTAINED ${androidInfo.serialNumber}',
-            level: LogLevel.info);
+        Logger.log('SERIAL NUMBER OBTAINED ${androidInfo.serialNumber}', level: LogLevel.info);
+        await _secureStorageService.writeData('clientID', androidInfo.serialNumber);
         return androidInfo.serialNumber;
       }else{
-        Logger.log('CANNOT GET SERIAL NUMBER FROM TERMINAL. RANDOM NUMBER GENERATING.',
-            level: LogLevel.warning);
+        Logger.log('CANNOT GET SERIAL NUMBER FROM TERMINAL. RANDOM NUMBER GENERATING.', level: LogLevel.warning);
         setState(() {
           actRandom = true;
         });
-        return randomID(15);
+        var random = randomID(15);
+        await _secureStorageService.writeData('clientID', random);
+        return random;
       }
     } catch (e) {
       Logger.log('SERIAL NUMBER GENERATION FAILED. RANDOM NUMBER GENERATING.',
@@ -1179,7 +1228,9 @@ class _WelcomePageState extends State<ConfigPage>
       setState(() {
         actRandom = true;
       });
-      return randomID(15);
+      var random = randomID(15);
+      await _secureStorageService.writeData('clientID', random);
+      return random;
     }
   }
 
@@ -1229,55 +1280,66 @@ class _WelcomePageState extends State<ConfigPage>
     return false;
   }
 
-  void loadDbData() async {
-    apiData = (await dbProvider.getApiData())!;
-    if (apiData != null) {
-      _addStatusMessage('DB DATA LOADED...');
-      Logger.log('DB DATA LOADED...', level: LogLevel.info);
-      ipAddressController.text = apiData.serverIP;
-      portNoController.text = apiData.portNo;
-      _selectedCurrency = apiData.currency;
-      _selectedVoice = apiData.voice;
-      clientIDController.text = apiData.clientID;
-      activationController.text = apiData.actCode;
-      _imgScrollCheck = apiData.imageScroll.toLowerCase() == 'true';
-      _videoScrollCheck = apiData.videoScroll.toLowerCase() == 'true';
-      _textScrollCheck = apiData.textScroll.toLowerCase() == 'true';
-      _imgScrollDuration = int.parse(apiData.imageDisplay);
-      _priceDisplayDuration = int.parse(apiData.priceDisplay);
-      actStatus = apiData.actStatus.toLowerCase() == 'true';
-      _logoCheck = apiData.logoEnable.toLowerCase() == 'true';
-      _bannerCheck = apiData.bannerEnable.toLowerCase() == 'true';
-      if(_imgScrollCheck){
-        _selectedScrollOption = 'IMAGE';
+  Future<void> _loadDbData() async {
+    // Use the previously retrieved secure storage values
+    if (secureStorageFlag == false) {
+      Logger.log('SECURE STORAGE DATA NOT EXISTS...', level: LogLevel.error);
+      _addStatusMessage('SECURE STORAGE DATA NOT EXISTS...');
+      await dbProvider.deleteApiData();
+      Logger.log('CLEARING LOCAL DB...', level: LogLevel.error);
+      _addStatusMessage('CLEARING LOCAL DB...');
+      Logger.log('PLEASE FILL ALL DETAILS...', level: LogLevel.error);
+      _addStatusMessage('PLEASE FILL ALL DETAILS...');
+    }//NO DATA IN SECURE STORAGE
+    else{
+      // Get the API data from the database
+      apiData = (await dbProvider.getApiData()) ?? apiData;
+      if(apiData.clientID == secureStorageclientID && apiData.actCode == secureStorageactCode){
+        if(apiData.actStatus == 'true'){
+          setState(() {
+            clientIDController.text = apiData.clientID = secureStorageclientID;
+            activationController.text = apiData.actCode = secureStorageactCode;
+            apiData.actAllow = 'false';
+            isGenerated = true;
+            ipAddressController.text = apiData.serverIP;
+            portNoController.text = apiData.portNo;
+            _selectedCurrency = apiData.currency;
+            _selectedVoice = apiData.voice;
+            _imgScrollCheck = apiData.imageScroll.toLowerCase() == 'true';
+            _videoScrollCheck = apiData.videoScroll.toLowerCase() == 'true';
+            _textScrollCheck = apiData.textScroll.toLowerCase() == 'true';
+            _imgScrollDuration = int.tryParse(apiData.imageDisplay) ?? 5;
+            _priceDisplayDuration = int.tryParse(apiData.priceDisplay) ?? 3;
+            _logoCheck = apiData.logoEnable.toLowerCase() == 'true';
+            _bannerCheck = apiData.bannerEnable.toLowerCase() == 'true';
+            if (_imgScrollCheck) {
+              _selectedScrollOption = 'IMAGE';
+            }
+            if (_videoScrollCheck) {
+              _selectedScrollOption = 'VIDEO';
+            }
+            if (_textScrollCheck) {
+              Logger.log(
+                  'TEXT SCROLL = $_textScrollCheck', level: LogLevel.info);
+            }
+          });
+        }
+      }//ACTIVATION VERIFIED, LOAD DATA
+      else{
+        Logger.log('CLEARING LOCAL DB...', level: LogLevel.error);
+        _addStatusMessage('CLEARING LOCAL DB...');
+        await dbProvider.deleteApiData();
+        setState(() {
+          apiData.clientID = clientIDController.text = secureStorageclientID;
+          apiData.actCode = activationController.text = secureStorageactCode;
+          apiData.actStatus = 'false';
+          apiData.actAllow = 'false';
+          isGenerated = true;
+          registerAllow = false;
+        });
       }
-      else if(_videoScrollCheck){
-        _selectedScrollOption = 'VIDEO';
-      }
-      else(_textScrollCheck){
-          Logger.log('TEXT SCROLL = ${_textScrollCheck}', level: LogLevel.info);
-        };
-      if (apiData.clientID != await getAndroidMacAddress()) {
-        _addStatusMessage('CLIENT ID NOT MATCHING...');
-        Logger.log('CLIENT ID NOT MATCHING...', level: LogLevel.info);
-        dbProvider.deleteApiData();
-        _addStatusMessage('API DATA DELETED...');
-        //TODO
-      }else{
-      }
-    } else {
-      _addStatusMessage('NO VALUE IN DATABASE...');
-      Logger.log('NO VALUE IN DATABASE...', level: LogLevel.info);
-    }
-    if((apiData.clientID!=null && apiData.actCode!=null) && (apiData.clientID!='' && apiData.actCode!='')) {
-      setState(() {
-        registerAllow = false;
-      });
-    }else{
-      setState(() {
-        registerAllow = true;
-      });
-    }
+
+    }//DATA FOUND IN SECURE STORAGE
   }
 
   void _increment(String type) {
@@ -1344,7 +1406,9 @@ class _WelcomePageState extends State<ConfigPage>
     try {
       clientIDController.text = await getAndroidMacAddress();
       int idLength = 30 - (clientIDController.text).length;
-      activationController.text = randomID(idLength);
+      var actValue = randomID(idLength);
+      await _secureStorageService.writeData('actCode', actValue);
+      activationController.text = actValue;
       formData['clientID'] = clientIDController.text;
       formData['actCode'] = activationController.text;
       String queryString = convertToQueryString(formData);
@@ -1363,6 +1427,8 @@ class _WelcomePageState extends State<ConfigPage>
         registerAllow ? "1" : "0"; // Assigns "1" if true, "0" if false
         apiData.actKey = payload;
       });
+      _addStatusMessage('TERMINAL SERIAL GENERATED...');
+      Logger.log('TERMINAL SERIAL GENERATED...', level: LogLevel.debug);
       return true;
     }catch(e){
       setState(() {
@@ -1419,7 +1485,6 @@ class _WelcomePageState extends State<ConfigPage>
       Logger.log('ALL INPUTS ARE MANDATORY...', level: LogLevel.info);
       return false;
     }
-
     setState(() {
       apiData.serverIP = ipAddressController.text;
       apiData.portNo = portNoController.text;

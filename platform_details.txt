@@ -1,0 +1,10 @@
+#C:\Users\pratheesh.r>flutter --version
+#Flutter 3.22.2 • channel stable • #https://github.com/flutter/flutter.git
+#Framework • revision 761747bfc5 (5 months ago) • 2024-06-#05 22:15:13 +0200
+#Engine • revision edd8546116
+#Tools • Dart 3.4.3 • DevTools 2.34.3
+
+#C:\Users\pratheesh.r>dart --version
+#Dart SDK version: 3.4.3 (stable) (Tue Jun 4 19:51:39 2024 #+0000) on "windows_x64"
+
+#C:\Users\pratheesh.r>

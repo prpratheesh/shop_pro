@@ -33,11 +33,13 @@ class ApiHelper {
     Logger.log('DIO INITIALIZED SUCCESSFULLY.', level: LogLevel.debug);
   }
 
-  Future<List<String>> fetchImageNameList() async {
+  Future<List<String>> fetchImageNameList(String imageDirName) async {
     Logger.log('FETCHING IMAGE LIST FROM $_baseUrl.', level: LogLevel.debug);
     try {
-      final response = await _dio.get(
-          '/imageList'); // Endpoint to get image list
+      final response = await _dio.post(
+          '/imageList',
+        data: {'imageDir': imageDirName},
+      ); // Endpoint to get image list
 
       Logger.log(
           'RESPONSE STATUS = ${response.statusCode.toString().toUpperCase()}.',
@@ -143,18 +145,18 @@ class ApiHelper {
   }
 
   Future<String?> updateTerminalDetailsTServer(payload) async {
-    Logger.log('DIO UPDATING TERMINAL DETAILS IN SERVER.', level: LogLevel.debug);
+    Logger.log('DIO UPDATING TERMINAL DETAILS IN SERVER...', level: LogLevel.debug);
     try {
       final response = await _dio.post('/insertTerminalData', data: payload);
       if (response.statusCode == 200) {
-        Logger.log('DIO TERMINAL DETAILS UPDATED.', level: LogLevel.debug);
+        Logger.log('DIO TERMINAL DETAILS UPDATED...', level: LogLevel.debug);
         return response.data['message'];
       }
-      Logger.log('DIO TERMINAL DETAIL UPDATE FAILURE WITH STATUS CODE ${response.statusCode}.',
+      Logger.log('DIO TERMINAL DETAIL UPDATE FAILURE WITH STATUS CODE ${response.statusCode}...',
           level: LogLevel.error);
       return 'TERMINAL UPDATE FAILURE';
     } catch (e) {
-      Logger.log('GENERAL EXCEPTION: ${e.toString().toUpperCase()}.',
+      Logger.log('GENERAL EXCEPTION: ${e.toString().toUpperCase()}...',
           level: LogLevel.error);
       return e.toString();
     }

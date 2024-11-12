@@ -10,12 +10,14 @@ class TemporaryOverlay extends StatelessWidget {
   final Duration duration;
   final bool showLogo; // New parameter to control logo visibility
   final Uint8List? logoData;
+  final String currencySymbol;
 
   TemporaryOverlay({
     this.message, // Nullable to allow for an error message
     this.errorMessage, // Allow passing a string message
     this.showLogo = false, // Default is false if not provided
     this.logoData,
+    this.currencySymbol = 'AED', // Default currency symbol if not provided
     Duration? duration,
   }) : duration = duration ?? const Duration(seconds: 5);
 
@@ -92,14 +94,16 @@ class TemporaryOverlay extends StatelessWidget {
                   TextSpan(
                     children: [
                       TextSpan(
-                        text: 'AED: ',
+                        text: '$currencySymbol ', // Add currency symbol
                         style: TextStyle(
                           color: Colors.blue,
                           fontSize: fontSizes.largerFontSize9,
                         ),
                       ),
                       TextSpan(
-                        text: message!.retail.toStringAsFixed(2),
+                        text: currencySymbol == 'OMR'
+                            ? message!.retail.toStringAsFixed(3) // 3 decimal places for OMR
+                            : message!.retail.toStringAsFixed(2), // 2 decimal places for AED or others
                         style: TextStyle(
                           color: Colors.green,
                           fontWeight: FontWeight.bold,
@@ -115,7 +119,8 @@ class TemporaryOverlay extends StatelessWidget {
                       ),
                     ],
                   ),
-                ), // RETAIL CURRENCY, PRICE AND SEPARATOR
+                ),
+                // RETAIL CURRENCY, PRICE AND SEPARATOR
                 Center(
                   child: Container(
                     height: height/8,

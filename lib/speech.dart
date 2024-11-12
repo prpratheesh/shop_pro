@@ -2,6 +2,8 @@ import 'package:flutter_tts/flutter_tts.dart';
 
 import 'package:flutter_tts/flutter_tts.dart';
 
+import 'logger.dart';
+
 class PriceSpeaker {
   final FlutterTts flutterTts;
 
@@ -15,15 +17,12 @@ class PriceSpeaker {
   // Function to list available voices
   Future<void> listAvailableVoices() async {
     List<dynamic> voices = await flutterTts.getVoices;
-    voices.forEach((voice) {
-      print(voice);
-    });
+    // Logger.log('AVAILABLE VOICE PATTERNS->${voices.toString()}', level: LogLevel.info);
   }
 
   Future<String> getAvailableVoices() async {
     List<dynamic> voices = await flutterTts.getVoices;
     String voiceList = voices.join(', '); // Join voices with a comma and space
-    print(voiceList); // Print the list of voices for debugging
     return voiceList; // Return the list of voices as a string
   }
 
@@ -37,9 +36,16 @@ class PriceSpeaker {
     await flutterTts.setSpeechRate(rate);
   }
 
-  // Function to speak the price
-  Future<void> speakPrice(double retailPrice) async {
-    String formattedPrice = formatPrice(retailPrice);
+  // Function to speak the price AED
+  Future<void> speakPriceAED(double retailPrice) async {
+    String formattedPrice = formatPriceAED(retailPrice);
+    await flutterTts.speak(formattedPrice);
+    // await flutterTts.speak(formattedPrice.replaceAll('.', '')); // Ensure no dots are included
+  }
+
+  // Function to speak the price OMR
+  Future<void> speakPriceOMR(double retailPrice) async {
+    String formattedPrice = formatPriceOMR(retailPrice);
     await flutterTts.speak(formattedPrice);
     // await flutterTts.speak(formattedPrice.replaceAll('.', '')); // Ensure no dots are included
   }
@@ -78,7 +84,7 @@ class PriceSpeaker {
   //
   //   return formattedPrice;
   // }
-  String formatPrice(double price) {
+  String formatPriceAED(double price) {
     int dirham = price.floor(); // Extract the Dirham part (whole number)
     int fills = ((price - dirham) * 100).round(); // Extract the exact Fils part without rounding
 
@@ -87,7 +93,20 @@ class PriceSpeaker {
     if (fills > 0) {
       formattedPrice += ' $fills Fills'; // Add fills only if present
     }
-    print(formattedPrice);
+    Logger.log('FORMATTED PRICE : $formattedPrice', level: LogLevel.info);
+    return formattedPrice;
+  }
+
+  String formatPriceOMR(double price) {
+    int riyal = price.floor(); // Extract the Riyal part (whole number)
+    int baisa = ((price - riyal) * 1000).round(); // Extract the exact Baisa part without rounding
+
+    // Create the formatted string
+    String formattedPrice = '$riyal Ree-yal'; // Ensure no dots are included
+    if (baisa > 0) {
+      formattedPrice += ' $baisa Baisa'; // Add baisa only if present
+    }
+    Logger.log('FORMATTED PRICE : $formattedPrice', level: LogLevel.info);
     return formattedPrice;
   }
 
@@ -101,7 +120,7 @@ class PriceSpeaker {
 
     // Create the formatted string
     String formattedPrice = '$dirhamText Dirham$fillsText'; // Construct the message
-    print(formattedPrice);
+    Logger.log('FORMATTED PRICE : $formattedPrice', level: LogLevel.info);
     return formattedPrice;
   }
 
