@@ -53,5 +53,3 @@ class MainActivity : FlutterActivity() {
         return super.onKeyUp(keyCode, event)
     }
 }
-
-

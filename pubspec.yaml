@@ -2,7 +2,7 @@ name: shop_pro
 description: "A new Flutter project."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 2.0.0+5
+version: 2.0.0+7
 
 environment:
   sdk: '>=3.4.3 <4.0.0'
@@ -17,7 +17,7 @@ dependencies:
   permission_handler: ^11.3.1
   google_fonts: ^6.2.1
   path: ^1.9.0
-  flutter_barcode_scanner: ^2.0.0
+#  flutter_barcode_scanner: ^2.0.0
   android_id: ^0.4.0
   intl: ^0.19.0
   flutter_secure_storage: ^9.2.2

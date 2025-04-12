@@ -7,6 +7,7 @@ class PriceSpeaker {
 
   PriceSpeaker() : flutterTts = FlutterTts() {
     flutterTts.getEngines.then((engines) {
+      Logger.log('AVAILABLE ENGINES : $engines', level: LogLevel.info);
       if (engines.isNotEmpty) {
         Logger.log('TTS ENGINE IS AVAILABLE.', level: LogLevel.info);
       } else {
@@ -14,10 +15,68 @@ class PriceSpeaker {
       }
     });
     // Set initial voice and speed
-    setVoice("en-US"); // Example for US English
-    setSpeechRate(0.5); // Set to 50% speed (0.0 to 1.0 scale)
+    // setVoice("en-US"); // Example for US English
+    // setSpeechRate(0.5); // Set to 50% speed (0.0 to 1.0 scale)
+    flutterTts.setLanguage("en-GB");
+    flutterTts.setPitch(1.0);
+    flutterTts.setSpeechRate(0.5);
+    flutterTts.setVolume(1.0);
+    flutterTts.setVoice({"name": "en-gb-x-gba-local", "locale": "en-GB"});
+    // speakTestMessage('Welcome');
     // listAvailableLanguages();
     // listAvailableVoices();
+  }
+
+  Future<void> speakSampleMessage(String message) async {
+    String languageCode = "en-GB";
+    List<dynamic> voices = await flutterTts.getVoices;
+    var selectedVoice = voices.firstWhere(
+          (voice) => voice["locale"] == languageCode,
+      orElse: () => null,
+    );
+    Map<String, String> voiceMap = Map<String, String>.from(selectedVoice);
+
+    try {
+      // Set default language and voice
+      await flutterTts.setLanguage(languageCode);
+      await flutterTts.setVoice(voiceMap);
+      await flutterTts.setPitch(1.0);
+      await flutterTts.setSpeechRate(0.5);
+      await flutterTts.setVolume(1.0);
+
+      // Speak the message
+      await flutterTts.speak(message);
+      Logger.log('SPEAK SUCCESS.', level: LogLevel.info);
+    } catch (e) {
+      Logger.log('ERROR IN SPEAK ENGINE. $e', level: LogLevel.error);
+    }
+  }
+
+  Future<void> setAndSpeak(String text, String languageCode) async {
+    List<dynamic> voices = await flutterTts.getVoices;
+
+    // Find the voice based on the locale
+    var selectedVoice = voices.firstWhere(
+          (voice) => voice["locale"] == languageCode,
+      orElse: () => null,
+    );
+
+    if (selectedVoice != null) {
+      // Explicitly cast to Map<String, String>
+      Map<String, String> voiceMap = Map<String, String>.from(selectedVoice);
+      Logger.log('-------------------------------------------------------------');
+      Logger.log(voiceMap.toString());
+      Logger.log(languageCode);
+      Logger.log(text);
+      Logger.log('-------------------------------------------------------------');
+
+      // Set the voice using the casted map
+      await flutterTts.setVoice(voiceMap);
+      await flutterTts.setLanguage(languageCode);
+      await flutterTts.speak(text);
+    } else {
+      Logger.log("Voice not found for $languageCode",level: LogLevel.error);
+    }
   }
 
   // Function to list available voices
@@ -102,30 +161,49 @@ class PriceSpeaker {
   //   }
   // }
   Future<void> speakMessage(String message) async {
-    // flutterTts.getLanguages.then((languages) {
-    //   Logger.log('LANGUAGES -> $languages', level: LogLevel.info);
-    // });
-
-    flutterTts.getVoices.then((voices) async {
-      // Logger.log('VOICES -> $voices', level: LogLevel.debug);
-
-      // Optionally, set a specific voice or language
-      if (voices.isNotEmpty) {
-        try {
-          Logger.log('NO VOICE IS SET DEFAULT. SETTING ONE NOW.',
-              level: LogLevel.critical);
-          await flutterTts.setVoice({"name": "en-US-language", "locale": "en-US"});
-        }
-        catch(e){
-          Logger.log('ERROR SETTING VOICE. $e',
-              level: LogLevel.error);
-        }
-      }
-    });
-
     try {
+      List<dynamic> voices = await flutterTts.getVoices;
+
+      if (voices.isNotEmpty) {
+        // Find the voice with locale 'en-US'
+        var selectedVoice = voices.firstWhere(
+              (voice) {
+            if (voice is Map<String, String>) {
+              return voice['locale'] == 'en-US'; // Check for 'en-US' locale
+            }
+            return false;
+          },
+          orElse: () => voices.first, // Fallback to the first voice if none is found
+        );
+
+        if (selectedVoice is Map<String, String>) {
+          await flutterTts.setVoice(selectedVoice); // Set the selected voice map
+          Logger.log('Voice set to: ${selectedVoice["name"]}', level: LogLevel.info);
+        } else {
+          Logger.log('Voice not found. Using default voice.', level: LogLevel.warning);
+        }
+      } else {
+        Logger.log('No voices available. Using default voice.', level: LogLevel.error);
+      }
+
       await flutterTts.speak(message);
-      Logger.log('SPEAK SUCCESS.', level: LogLevel.info);  // Correct log level for success
+      Logger.log('SPEAK SUCCESS.', level: LogLevel.info);
+    } catch (e) {
+      Logger.log('ERROR IN SPEAK ENGINE. $e', level: LogLevel.error);
+    }
+  }
+
+  Future<void> speakTestMessage(String message) async {
+    try {
+      // Set default language and voice
+      await flutterTts.setLanguage("en-US");
+      await flutterTts.setPitch(1.0);
+      await flutterTts.setSpeechRate(0.5);
+      await flutterTts.setVolume(1.0);
+
+      // Speak the message
+      await flutterTts.speak(message);
+      Logger.log('SPEAK SUCCESS.', level: LogLevel.info);
     } catch (e) {
       Logger.log('ERROR IN SPEAK ENGINE. $e', level: LogLevel.error);
     }

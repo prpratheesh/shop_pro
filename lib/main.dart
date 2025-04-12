@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shop_pro/config_page.dart';
+import 'package:shop_pro/speech.dart';
 import 'db_operations.dart';
 import 'logger.dart';
 import 'login_page.dart';
@@ -15,16 +16,25 @@ void main() async {
   final DeviceInfoPlugin deviceInfoPlugin = DeviceInfoPlugin();
   AndroidDeviceInfo androidInfo = await deviceInfoPlugin.androidInfo;
   int androidVersion = androidInfo.version.sdkInt;
+  // _initializePermissions();
 
   // Initialize Database
   Logger.log('APPLICATION STARTED.', level: LogLevel.info);
   Logger.log('DB SETTINGS STARTED.', level: LogLevel.info);
   await DBProvider.db.initDB(newVersion: 4);
   Logger.log('DB SETTINGS COMPLETED.', level: LogLevel.info);
+  Logger.log('ANDROID VERSION: $androidVersion', level: LogLevel.info);
+
+  // Initialize PriceSpeaker
+  // PriceSpeaker priceSpeaker = PriceSpeaker();
+
+  // Test PriceSpeaker functionality
+  // await priceSpeaker.speakSampleMessage("Hello, welcome to Shop Pro. This is a sample text!");
+  // await priceSpeaker.setAndSpeak("Hello there", "en-GB");
 
   runApp(MaterialApp(
       debugShowCheckedModeBanner: false,
-      home:App(androidInfo: androidInfo)));  // Pass androidInfo to App widget
+      home: App(androidInfo: androidInfo))); // Pass androidInfo to App widget
 }
 
 class App extends StatefulWidget {
@@ -41,16 +51,44 @@ class _AppState extends State<App> {
   void initState() {
     super.initState();
     // Request Permissions after the widget is created
-    // _requestPermissions();
+    _initializePermissions();
   }
 
-  // Future<void> _requestPermissions() async {
-  //   bool permissionsGranted = await requestPermissions(widget.androidInfo, context);
-  //   if (!permissionsGranted) {
-  //     Logger.log('PERMISSIONS NOT GRANTED. Exiting application.', level: LogLevel.error);
-  //     exit(0); // Exit the app if permissions are not granted
-  //   }
-  // }
+  void _initializePermissions() {
+    // Call the async method without awaiting it
+    _requestPermissions();
+  }
+
+  Future<void> _requestPermissions() async {
+    Map<Permission, PermissionStatus> statuses = await [
+      // Bluetooth Permissions (Android 12+)
+      Permission.bluetooth,
+      Permission.bluetoothConnect,
+      Permission.bluetoothScan,
+      Permission.locationWhenInUse,
+      Permission.location,
+      Permission.microphone,
+      Permission.camera,
+      Permission.speech,
+      Permission.audio, // Audio permission
+    ].request();
+
+    statuses.forEach((permission, status) {
+      if (status.isGranted) {
+        Logger.log('$permission permission granted.', level: LogLevel.info);
+      } else if (status.isDenied) {
+        Logger.log('$permission permission denied.', level: LogLevel.warning);
+      } else if (status.isPermanentlyDenied) {
+        Logger.log('$permission permission permanently denied.', level: LogLevel.critical);
+        // Open app settings to allow the user to grant permission manually
+        openAppSettings();
+      } else if (status.isRestricted) {
+        Logger.log('$permission permission is restricted.', level: LogLevel.warning);
+      } else {
+        Logger.log('$permission permission is in an unknown state.', level: LogLevel.warning);
+      }
+    });
+        }
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +110,7 @@ class _AppState extends State<App> {
 Future<bool> requestPermissions(AndroidDeviceInfo androidInfo, BuildContext context) async {
   // Get the Android version
   String releaseVersion = androidInfo.version.release;
-  int? releaseVersionInt = int.tryParse(releaseVersion.split('.')[0]);  // Major version number
+  int? releaseVersionInt = int.tryParse(releaseVersion.split('.')[0]); // Major version number
 
   if (releaseVersionInt == null) {
     Logger.log('ANDROID VERSION ERROR: Unable to parse version', level: LogLevel.error);
@@ -118,8 +156,7 @@ Future<bool> _requestPermissionsForAndroid10AndAbove(BuildContext context) async
   // Return true if both permissions are granted
   if (result[Permission.camera]?.isGranted == true &&
       result[Permission.photos]?.isGranted == true &&
-      result[Permission.audio]?.isGranted == true
-  ) {
+      result[Permission.audio]?.isGranted == true) {
     Logger.log('Audio, Camera and Photos permissions granted.', level: LogLevel.info);
     return true;
   } else {
@@ -128,7 +165,7 @@ Future<bool> _requestPermissionsForAndroid10AndAbove(BuildContext context) async
   }
 }
 
-Future<bool> _requestPermissionsForBelowAndroid10(BuildContext context) async   {
+Future<bool> _requestPermissionsForBelowAndroid10(BuildContext context) async {
   Logger.log('PERMISSION SETTINGS STARTED.', level: LogLevel.info);
 
   // Check the current status of the Storage and Camera permissions
@@ -168,8 +205,10 @@ Future<void> _showPermissionDialog(BuildContext context, String permissionName, 
     builder: (BuildContext context) {
       return CupertinoAlertDialog(
         title: const Text('Permission Required'),
-        content: SingleChildScrollView(  // Wrap the content in SingleChildScrollView
-          child: ListBody(  // ListBody widget allows for a vertical arrangement of content
+        content: SingleChildScrollView(
+          // Wrap the content in SingleChildScrollView
+          child: ListBody(
+            // ListBody widget allows for a vertical arrangement of content
             children: <Widget>[
               Text('This app requires $permissionName permission to function properly.'),
             ],

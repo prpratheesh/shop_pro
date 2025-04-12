@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
-import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart' as barcode_scanner;
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -96,7 +95,8 @@ class _LoginPageState extends State<LoginPage> {
     // priceSpeaker.setVoice("en"); // British English
     // priceSpeaker.setSpeechRate(0.5); // Speed at 70%
     // // Access the MqttProvider
-    priceSpeaker.setLanguage('en-US');
+    // priceSpeaker.setVoice({"name": "en-gb-x-gba-local", "locale": "en-GB"});
+    priceSpeaker.setLanguage("en-GB");
     priceSpeaker.setVolume(1.0);
     priceSpeaker.setSpeechRate(0.5);
     priceSpeaker.setPitch(1.0);
@@ -599,7 +599,7 @@ class _LoginPageState extends State<LoginPage> {
     try {
       apiData = (await dbProvider.getApiData());
       _apiHelper = ApiHelper(); // Initialize _apiHelper
-      _apiHelper.initializeDio(apiData.serverIP, apiData.portNo);
+      _apiHelper.initializeHttp(apiData.serverIP, apiData.portNo);
       Logger.log('DIO INITIALIZED SUCCESSFULLY.', level: LogLevel.info);
       setState(() {
         _loadComplete = true;
@@ -804,16 +804,16 @@ class _LoginPageState extends State<LoginPage> {
                 borderRadius: BorderRadius.circular(5.0),
               ),
               child: GestureDetector(
-                onTap: () {
-                  // Prevent focus on the TextFormField
-                  FocusScope.of(context).requestFocus(FocusNode());
-                  _hideSystemBars();
-                },
-                onDoubleTap: () {
-                  // Prevent focus on the TextFormField
-                  FocusScope.of(context).requestFocus(FocusNode());
-                  _hideSystemBars();
-                },
+                // onTap: () {
+                //   // Prevent focus on the TextFormField
+                //   FocusScope.of(context).requestFocus(FocusNode());
+                //   _hideSystemBars();
+                // },
+                // onDoubleTap: () {
+                //   // Prevent focus on the TextFormField
+                //   FocusScope.of(context).requestFocus(FocusNode());
+                //   _hideSystemBars();
+                // },
                 child: TextFormField(
                   keyboardType: const TextInputType.numberWithOptions(
                       decimal: true),
@@ -1019,99 +1019,6 @@ class _LoginPageState extends State<LoginPage> {
       );
     }
   }
-  // Widget build(BuildContext context) {
-  //   final fontSizes = FontSizes.fromContext(context);
-  //   return Scaffold(
-  //     body: SingleChildScrollView(
-  //       child: videDownloadComplete ?
-  //       Container(
-  //         key: ValueKey<int>(_currentImageIndex), // Unique key for the current image
-  //         height: MediaQuery.of(context).size.height,
-  //         width: MediaQuery.of(context).size.width,
-  //         child: AspectRatio(
-  //           aspectRatio: _videoController?.value.aspectRatio ?? 16 / 9,
-  //           child: _videoController != null && _videoController!.value.isInitialized
-  //               ? VideoPlayer(_videoController!)
-  //               : const Center(child: CircularProgressIndicator()), // Show a loader if the video isn't initialized
-  //         ),
-  //       ) :
-  //       AnimatedSwitcher(
-  //         duration: const Duration(seconds: 1), // Animation duration
-  //         child: Container(
-  //           key: ValueKey<int>(_currentImageIndex), // Unique key for the current image
-  //           height: MediaQuery.of(context).size.height,
-  //           width: MediaQuery.of(context).size.width,
-  //           decoration: BoxDecoration(
-  //             image: DecorationImage(
-  //               image: imageBytesList.isNotEmpty
-  //                   ? MemoryImage(imageBytesList[_currentImageIndex]) // Use downloaded image
-  //                   : const AssetImage('assets/images/bg1.jpg') as ImageProvider, // Use fallback predefined image
-  //               fit: BoxFit.fill,
-  //               colorFilter: ColorFilter.mode(
-  //                   Colors.black.withOpacity(0), BlendMode.luminosity),
-  //             ),
-  //             borderRadius: const BorderRadius.all(Radius.circular(0)),
-  //             boxShadow: <BoxShadow>[
-  //               BoxShadow(
-  //                   color: Colors.grey.shade200,
-  //                   offset: const Offset(2, 4),
-  //                   blurRadius: 5,
-  //                   spreadRadius: 2)
-  //             ],
-  //             gradient: const LinearGradient(
-  //               begin: Alignment.topCenter,
-  //               end: Alignment.bottomCenter,
-  //               colors: [Colors.blue, Colors.purple],
-  //             ),
-  //           ),
-  //           child: Column(
-  //             crossAxisAlignment: CrossAxisAlignment.center,
-  //             mainAxisAlignment: MainAxisAlignment.center,
-  //             children: <Widget>[
-  //               const Spacer(),
-  //               // Conditionally display scrolling text based on apiData.textScroll
-  //               if (apiData.textScroll == 'true' && textScrollData!='')
-  //                 Padding(
-  //                   padding: const EdgeInsets.symmetric(horizontal: 0.0, vertical: 0.0),
-  //                   child: TextScroll(
-  //                     textScrollData ?? '', // Use an empty string if textScrollContent is null
-  //                     velocity: Velocity(pixelsPerSecond: Offset(30, 0)),
-  //                     mode: TextScrollMode.bouncing, // Choose your scroll mode
-  //                     delayBefore: Duration(seconds: 1),
-  //                     pauseBetween: Duration(seconds: 1),
-  //                     textAlign: TextAlign.center,
-  //                     style: TextStyle(color: Colors.white, fontSize: 18),
-  //                   ),
-  //                 ),
-  //               Padding(
-  //                 padding: const EdgeInsets.only(bottom: 50.0), // Optional: Add padding for spacing from the bottom
-  //                 child: _barcodeScanner(fontSizes), // Place the barcode scanner at the bottom
-  //               ),
-  //               // Conditionally display the banner
-  //               Visibility(
-  //                 visible: bannerEnable, // Banner visibility based on bannerEnable
-  //                 child: Align(
-  //                   alignment: Alignment.bottomCenter,
-  //                   child: Container(
-  //                     color: Colors.black.withOpacity(0.7), // Banner background color
-  //                     height: MediaQuery.of(context).size.height / 10,
-  //                     width: MediaQuery.of(context).size.width,
-  //                     child: Center(
-  //                       child: Text(
-  //                         'Scan Your Price Here',
-  //                         style: TextStyle(color: Colors.white, fontSize: fontSizes.largerFontSize8), // Use fontSizes for consistency
-  //                       ),
-  //                     ),
-  //                   ),
-  //                 ),
-  //               ),
-  //             ],
-  //           ),
-  //         ),
-  //       ),
-  //     ),
-  //   );
-  // }
 }
 
 Future<Uint8List> downloadImage(Map<String, String> args) async {

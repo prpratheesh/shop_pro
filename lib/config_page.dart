@@ -98,7 +98,7 @@ class _WelcomePageState extends State<ConfigPage>
   );
   int _imgScrollDuration = 5; // Initial count
   int _priceDisplayDuration = 3; // Initial count
-  bool registerAllow = true;
+  bool registerAllow = false;
   late ApiHelper _apiHelper;
   final String IV = 'bQ8zNpD4WjX7K9Lm';
   final Map<String, String> formData = {
@@ -118,8 +118,8 @@ class _WelcomePageState extends State<ConfigPage>
   @override
   initState() {
     super.initState();
-    priceSpeaker.setLanguage("en-US");
-    // priceSpeaker.setLanguage("mai-IN");
+    priceSpeaker.setLanguage("en-GB");
+    // priceSpeaker.setVoice({"name": "en-gb-x-gba-local", "locale": "en-GB"});
     priceSpeaker.setVolume(1.0);
     priceSpeaker.setSpeechRate(0.5);
     priceSpeaker.setPitch(1.0);
@@ -341,7 +341,7 @@ class _WelcomePageState extends State<ConfigPage>
         if((ipAddressController.text.isNotEmpty && portNoController.text.isNotEmpty)) {
           _apiHelper = ApiHelper();
           _addStatusMessage('CONNECTING TO SERVER...');
-          _apiHelper.initializeDio(ipAddressController.text, portNoController.text);
+          _apiHelper.initializeHttp(ipAddressController.text, portNoController.text);
           if(await _apiHelper.testConnectivity()){
             _addStatusMessage('SERVER CONNECTED...');
           }else{
@@ -704,7 +704,7 @@ class _WelcomePageState extends State<ConfigPage>
   Widget _requestBTN() {
     return InkWell(
       onTap: () async {
-        if(apiData.actStatus == 'false' || apiData.actStatus.isEmpty) {
+        if(apiData.actStatus == 'false' || apiData.actStatus.isEmpty || apiData.actStatus == '') {
           if (secureStorageFlag == false) {
             Logger.log('ACTIVATION DATA NOT FOUND IN SYSTEM...',
                 level: LogLevel.error);
@@ -715,7 +715,7 @@ class _WelcomePageState extends State<ConfigPage>
           else {
             if (isGenerated == true) {
               _apiHelper = ApiHelper();
-              _apiHelper.initializeDio(
+              _apiHelper.initializeHttp(
                   ipAddressController.text, portNoController.text);
               if (await _apiHelper.testConnectivity()) {
                 _addStatusMessage('SERVER CONNECTED...');
@@ -772,7 +772,7 @@ class _WelcomePageState extends State<ConfigPage>
       onTap: () async {
         if (apiData.actStatus == 'false' || apiData.actStatus=='') {
           _apiHelper = ApiHelper();
-          _apiHelper.initializeDio(
+          _apiHelper.initializeHttp(
               ipAddressController.text, portNoController.text);
           if (await _apiHelper.testConnectivity()) {
             _addStatusMessage('SERVER CONNECTED...');

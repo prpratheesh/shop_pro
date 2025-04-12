@@ -4,41 +4,41 @@
         android:name="android.hardware.camera"
         android:required="true" />
 
-<!--    &lt;!&ndash; Bluetooth Permissions (Android 12 and above) &ndash;&gt;-->
+    <!-- Bluetooth Permissions (Android 12 and above) -->
 <!--    <uses-permission android:name="android.permission.BLUETOOTH" />-->
 <!--    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />-->
 
-<!--    &lt;!&ndash; Permissions for Bluetooth LE on Android 12+ &ndash;&gt;-->
+    <!-- Permissions for Bluetooth LE on Android 12+ -->
 <!--    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:required="false"/>-->
 <!--    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" android:required="false" />-->
 
-<!--    &lt;!&ndash; Location Permissions (Both Android 7+ and 14) &ndash;&gt;-->
+    <!-- Location Permissions (Both Android 7+ and 14) -->
 <!--    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />-->
 <!--    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />-->
 
-<!--    &lt;!&ndash; Storage Permissions (for Android 9 and below) &ndash;&gt;-->
+    <!-- Storage Permissions (for Android 9 and below) -->
 <!--    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />-->
 <!--    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />-->
 
-<!--    &lt;!&ndash; Storage Permissions for Android 10+ with Scoped Storage &ndash;&gt;-->
+    <!-- Storage Permissions for Android 10+ with Scoped Storage -->
 <!--    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" android:required="false"/>-->
 
-<!--    &lt;!&ndash; Permissions for Android 13+ (Media Permissions) &ndash;&gt;-->
+    <!-- Permissions for Android 13+ (Media Permissions) -->
 <!--    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" android:required="false"/>-->
 <!--    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" android:required="false"/>-->
 <!--    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" android:required="false"/>-->
 
-<!--    &lt;!&ndash; Camera and Flashlight Permissions &ndash;&gt;-->
+    <!-- Camera and Flashlight Permissions -->
 <!--    <uses-permission android:name="android.permission.CAMERA" />-->
 <!--    <uses-permission android:name="android.permission.FLASHLIGHT" />-->
 
-<!--    &lt;!&ndash; Biometric Permissions (Fingerprint/Biometric) &ndash;&gt;-->
+    <!-- Biometric Permissions (Fingerprint/Biometric) -->
 <!--    <uses-permission android:name="android.permission.USE_BIOMETRIC" />-->
 <!--    <uses-permission android:name="android.permission.USE_FINGERPRINT" />-->
 
     <!-- Network Permissions -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<!--    <uses-permission android:name="android.permission.INTERNET" />-->
+<!--    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />-->
 
 <!--    &lt;!&ndash; Notifications (Android 13+) &ndash;&gt;-->
 <!--    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" android:required="false" />-->
@@ -49,6 +49,19 @@
 <!--    &lt;!&ndash; Audio Permission &ndash;&gt;-->
 <!--    <uses-permission android:name="android.permission.RECORD_AUDIO" />-->
 <!--    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />-->
+
+<!--    <uses-permission android:name="android.permission.RECORD_AUDIO"/>-->
+<!--    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>-->
+
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.BLUETOOTH"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
         android:label="Shop Pro"
