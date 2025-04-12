@@ -113,11 +113,17 @@ class _WelcomePageState extends State<ConfigPage>
   bool secureStorageFlag = false;
   String secureStorageclientID = '';
   String secureStorageactCode = '';
-
+  bool isPlaying = false;
 
   @override
   initState() {
     super.initState();
+    priceSpeaker.setLanguage("en-US");
+    // priceSpeaker.setLanguage("mai-IN");
+    priceSpeaker.setVolume(1.0);
+    priceSpeaker.setSpeechRate(0.5);
+    priceSpeaker.setPitch(1.0);
+    // Access the MqttProvider
     animationController = AnimationController(duration: const Duration(seconds: 2), vsync: this);
     animationController.repeat();
     _focusNodeIp = FocusNode();
@@ -332,7 +338,7 @@ class _WelcomePageState extends State<ConfigPage>
   Widget _testButton() {
     return InkWell(
       onTap: () async {
-        if((ipAddressController.text!=null && portNoController!=null) && (ipAddressController.text!='' && portNoController!='')) {
+        if((ipAddressController.text.isNotEmpty && portNoController.text.isNotEmpty)) {
           _apiHelper = ApiHelper();
           _addStatusMessage('CONNECTING TO SERVER...');
           _apiHelper.initializeDio(ipAddressController.text, portNoController.text);
@@ -516,23 +522,19 @@ class _WelcomePageState extends State<ConfigPage>
 
   Widget _initButton() {
     return InkWell(
-      onTap: () async {
-
-        _addStatusMessage('INIT BUTTON PRESSED');
-      },
+      onTap: isPlaying ? null : _handleTap, // Disable button if already playing
       child: Container(
         width: MediaQuery.of(context).size.width / 2.5,
         height: 50,
         alignment: Alignment.center,
-        decoration: const BoxDecoration(
-          borderRadius: BorderRadius.all(Radius.circular(10)),
-          color: Colors.lightGreen,
+        decoration: BoxDecoration(
+          borderRadius: const BorderRadius.all(Radius.circular(10)),
+          color: isPlaying ? Colors.grey : Colors.lightGreen, // Change color while playing
         ),
-        child: Text(
-          'INIT',
-          style: TextStyle(
-              fontSize: fontSizes.baseFontSize,
-              color: Colors.black), // Adjusted font size to match others
+        child: Icon(
+          isPlaying ? Icons.pause : Icons.play_arrow, // Switch between play and pause
+          color: Colors.black,
+          size: 30, // Adjust the size of the icon
         ),
       ),
     );
@@ -721,8 +723,7 @@ class _WelcomePageState extends State<ConfigPage>
                   "TERMINAL_SERIAL": apiData.clientID,
                   "RANDOM_ID": apiData.actCode,
                   "STATUS": apiData.actStatus.toString(),
-                  "CREATED_DATE": apiData.dateTime != null &&
-                      apiData.dateTime.isNotEmpty
+                  "CREATED_DATE": apiData.dateTime.isNotEmpty
                       ? apiData.dateTime
                       : _getCurrentDateTime(),
                   "UPDATED_DATE": _getCurrentDateTime(),
@@ -1206,7 +1207,7 @@ class _WelcomePageState extends State<ConfigPage>
     final deviceInfoPlugin = DeviceInfoPlugin();
     try {
       final androidInfo = await deviceInfoPlugin.androidInfo;
-      if(androidInfo.serialNumber!='unknown' && androidInfo.serialNumber!= null) {
+      if(androidInfo.serialNumber!='unknown') {
         setState(() {
           actRandom = false;
         });
@@ -1246,12 +1247,12 @@ class _WelcomePageState extends State<ConfigPage>
   }
 
   bool validateSysConfigData() {
-    if (ipAddressController.text != null && ipAddressController.text != '') {
-      if (portNoController.text != null && portNoController.text != '') {
-        if (currencyCodes != null && currencyCodes != '') {
-          if (voiceCodes != null && voiceCodes != '') {
-            if (clientIDController.text != null && clientIDController.text != '') {
-              if (activationController.text != null && activationController.text != '') {
+    if (ipAddressController.text != '') {
+      if (portNoController.text != '') {
+        if (currencyCodes.isNotEmpty) {
+          if (voiceCodes.isNotEmpty) {
+            if (clientIDController.text != '') {
+              if (activationController.text != '') {
                 return true;
               } else {
                 _addStatusMessage('ACTIVATION CODE IS NOT VALID...');
@@ -1322,6 +1323,12 @@ class _WelcomePageState extends State<ConfigPage>
               Logger.log(
                   'TEXT SCROLL = $_textScrollCheck', level: LogLevel.info);
             }
+            if((_imgScrollCheck == false) && (_videoScrollCheck == false)){
+              setState(() {
+                _imgScrollCheck = true;
+              });
+            }
+            Logger.log('_imgScrollCheck = $_imgScrollCheck -> _videoScrollCheck = $_videoScrollCheck -> _textScrollCheck = $_textScrollCheck', level: LogLevel.info);
           });
         }
       }//ACTIVATION VERIFIED, LOAD DATA
@@ -1507,7 +1514,7 @@ class _WelcomePageState extends State<ConfigPage>
     if (_areAllFieldsPopulated()) {
       _addStatusMessage('SAVING DATA TO DATABASE...');
       Logger.log('SAVING DATA TO DATABASE...', level: LogLevel.info);
-
+      Logger.log('${apiData.toString()}', level: LogLevel.critical);
       // Save data to the database
       bool isSaved = await dbProvider.insertApiData(apiData);
       if (isSaved) {
@@ -1606,6 +1613,30 @@ class _WelcomePageState extends State<ConfigPage>
     Logger.log('SAVING DATA TO DATABASE...', level: LogLevel.info);
     _addStatusMessage('SAVING DATA TO DATABASE...');
     return true;
+  }
+
+  Future<void> _handleTap() async {
+    setState(() {
+      isPlaying = true; // Set to playing state
+    });
+    // Await the completion of the speaking action
+    double samplePrice=2.732000;
+    if (_selectedVoice == 'VOICE1' && _selectedCurrency == 'AED') {
+      await priceSpeaker.speakPriceAED(samplePrice);
+    } else if (_selectedVoice == 'VOICE1' && _selectedCurrency == 'OMR') {
+      await priceSpeaker.speakPriceOMR(samplePrice);
+    }
+    else {
+      await priceSpeaker.speakPriceText(samplePrice);
+    }
+    // Await the completion of the speaking action
+    // await priceSpeaker.speakMessage("To Dirhm Seventy Five Fills");
+    _addStatusMessage('PLAYING AUDIO');
+    Logger.log('PLAYING AUDIO', level: LogLevel.critical);
+    // After the action completes, reset to the initial state
+    setState(() {
+      isPlaying = false;
+    });
   }
 
   @override

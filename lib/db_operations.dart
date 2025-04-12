@@ -142,20 +142,20 @@ class DBProvider {
       return false;
     }
   }
-  Future<ApiDataModel?> getApiData() async {
+  Future<ApiDataModel> getApiData() async {
     Logger.log('GET API DATA CALLED.', level: LogLevel.debug);
     final db = await database;
     try {
       final res = await db?.query("ApiData");
       if (res == null || res.isEmpty) {
         Logger.log('NO DATA FOUND IN TABLE API DATA.', level: LogLevel.debug);
-        return null;  // Safely handle null or empty result
+        throw Exception('No data found in table ApiData');
       }
       Logger.log('$res', level: LogLevel.debug);
       return ApiDataModel.fromMap(res.first);
     } catch (e) {
       Logger.log('ERROR GETTING DATA FROM TABLE API DATA. ${e.toString().toUpperCase()}.', level: LogLevel.error);
-      return null;
+      throw Exception('Error retrieving API data: ${e.toString()}');
     }
   }
   Future<bool> deleteApiData() async {

@@ -1,23 +1,34 @@
+import 'dart:async';
 import 'package:flutter_tts/flutter_tts.dart';
-
-import 'package:flutter_tts/flutter_tts.dart';
-
 import 'logger.dart';
 
 class PriceSpeaker {
   final FlutterTts flutterTts;
 
   PriceSpeaker() : flutterTts = FlutterTts() {
+    flutterTts.getEngines.then((engines) {
+      if (engines.isNotEmpty) {
+        Logger.log('TTS ENGINE IS AVAILABLE.', level: LogLevel.info);
+      } else {
+        Logger.log('NO TTS ENGINE FOUND.', level: LogLevel.error);
+      }
+    });
     // Set initial voice and speed
     setVoice("en-US"); // Example for US English
     setSpeechRate(0.5); // Set to 50% speed (0.0 to 1.0 scale)
-    listAvailableVoices();
+    // listAvailableLanguages();
+    // listAvailableVoices();
   }
 
   // Function to list available voices
   Future<void> listAvailableVoices() async {
     List<dynamic> voices = await flutterTts.getVoices;
-    // Logger.log('AVAILABLE VOICE PATTERNS->${voices.toString()}', level: LogLevel.info);
+    Logger.log('AVAILABLE VOICE PATTERNS->${voices.toString()}', level: LogLevel.info);
+  }
+
+  Future<void> listAvailableLanguages() async {
+    List<dynamic> languages = await flutterTts.getLanguages;
+    Logger.log('AVAILABLE LANGUAGES->${languages.toString()}', level: LogLevel.error);
   }
 
   Future<String> getAvailableVoices() async {
@@ -29,6 +40,25 @@ class PriceSpeaker {
   // Function to set the voice
   Future<void> setVoice(String language) async {
     await flutterTts.setLanguage(language);
+    // await flutterTts.setVoice({"name": "en-us-x-sfg-network", "locale": "en-US"});
+    // await flutterTts.setVoice({"name": "kn-in-x-knd-network", "locale": "kn-IN"});
+  }
+
+  // Function to set the voice
+  Future<void> setLanguage(String language) async {
+    var isLanguageAvailable = await flutterTts.isLanguageAvailable(language);
+    Logger.log('LANGUAGE IS SET.', level: LogLevel.info);
+    try {
+      await flutterTts.setLanguage(language);
+      Logger.log('LANGUAGE IS SET.', level: LogLevel.info);
+    } catch (e) {
+      Logger.log('ERROR SETTING LANGUAGE.', level: LogLevel.error);
+    }
+  }
+
+  // Function to set pitch
+  Future<void> setPitch(double pitch) async {
+    await flutterTts.setPitch(pitch);
   }
 
   // Function to set the speech rate
@@ -57,10 +87,53 @@ class PriceSpeaker {
   }
 
   // Function to speak a custom message
+  // Future<void> speakMessage(String message) async {
+  //   flutterTts.getLanguages.then((languages) {
+  //     Logger.log('LANGUAGES -> $languages', level: LogLevel.info);
+  //   });
+  //   flutterTts.getVoices.then((voices) {
+  //     Logger.log('VOICES -> $voices', level: LogLevel.info);
+  //   });
+  //   try {
+  //     await flutterTts.speak(message);
+  //     Logger.log('SPEAK SUCCESS.', level: LogLevel.error);
+  //   }catch(e){
+  //     Logger.log('ERROR IN SPEAK ENGINE. $e', level: LogLevel.error);
+  //   }
+  // }
   Future<void> speakMessage(String message) async {
-    await flutterTts.speak(message);
+    // flutterTts.getLanguages.then((languages) {
+    //   Logger.log('LANGUAGES -> $languages', level: LogLevel.info);
+    // });
+
+    flutterTts.getVoices.then((voices) async {
+      // Logger.log('VOICES -> $voices', level: LogLevel.debug);
+
+      // Optionally, set a specific voice or language
+      if (voices.isNotEmpty) {
+        try {
+          Logger.log('NO VOICE IS SET DEFAULT. SETTING ONE NOW.',
+              level: LogLevel.critical);
+          await flutterTts.setVoice({"name": "en-US-language", "locale": "en-US"});
+        }
+        catch(e){
+          Logger.log('ERROR SETTING VOICE. $e',
+              level: LogLevel.error);
+        }
+      }
+    });
+
+    try {
+      await flutterTts.speak(message);
+      Logger.log('SPEAK SUCCESS.', level: LogLevel.info);  // Correct log level for success
+    } catch (e) {
+      Logger.log('ERROR IN SPEAK ENGINE. $e', level: LogLevel.error);
+    }
   }
 
+  Future<void> setVolume(double volume) async {
+    await flutterTts.setVolume(volume);
+  }
   // Helper to format the price into words
   // String formatPrice(double price) {
   //   int dirham = price.floor();

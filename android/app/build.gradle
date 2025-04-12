@@ -28,6 +28,13 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def newApkName = "ShopPro_V${variant.versionName}.${variant.versionCode}.apk"
+            outputFileName = newApkName
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
@@ -42,6 +49,15 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName
+    }
+
+    signingConfigs {
+        release {
+            storeFile file("D:/Flutter/shop_pro/Keys/release-key.jks")
+            storePassword "Admin123..." // Replace with your keystore password
+            keyAlias "release-key.jks" // Replace with your key alias
+            keyPassword "Admin123..." // Replace with your key password
+        }
     }
 
     buildTypes {

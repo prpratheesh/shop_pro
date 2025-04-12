@@ -1,28 +1,61 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:tools="http://schemas.android.com/tools"
+    xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature
         android:name="android.hardware.camera"
         android:required="true" />
-    <uses-permission android:name="android.permission.BLUETOOTH"/>
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-    <uses-permission android:name="android.permission.CAMERA"/>
-    <uses-permission android:name="android.permission.FLASHLIGHT" />
-    <uses-permission android:name="android.permission.BROADCAST_SCAN_ACTION" />
+
+<!--    &lt;!&ndash; Bluetooth Permissions (Android 12 and above) &ndash;&gt;-->
+<!--    <uses-permission android:name="android.permission.BLUETOOTH" />-->
+<!--    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />-->
+
+<!--    &lt;!&ndash; Permissions for Bluetooth LE on Android 12+ &ndash;&gt;-->
+<!--    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:required="false"/>-->
+<!--    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" android:required="false" />-->
+
+<!--    &lt;!&ndash; Location Permissions (Both Android 7+ and 14) &ndash;&gt;-->
+<!--    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />-->
+<!--    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />-->
+
+<!--    &lt;!&ndash; Storage Permissions (for Android 9 and below) &ndash;&gt;-->
+<!--    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />-->
+<!--    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />-->
+
+<!--    &lt;!&ndash; Storage Permissions for Android 10+ with Scoped Storage &ndash;&gt;-->
+<!--    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" android:required="false"/>-->
+
+<!--    &lt;!&ndash; Permissions for Android 13+ (Media Permissions) &ndash;&gt;-->
+<!--    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" android:required="false"/>-->
+<!--    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" android:required="false"/>-->
+<!--    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" android:required="false"/>-->
+
+<!--    &lt;!&ndash; Camera and Flashlight Permissions &ndash;&gt;-->
+<!--    <uses-permission android:name="android.permission.CAMERA" />-->
+<!--    <uses-permission android:name="android.permission.FLASHLIGHT" />-->
+
+<!--    &lt;!&ndash; Biometric Permissions (Fingerprint/Biometric) &ndash;&gt;-->
+<!--    <uses-permission android:name="android.permission.USE_BIOMETRIC" />-->
+<!--    <uses-permission android:name="android.permission.USE_FINGERPRINT" />-->
+
+    <!-- Network Permissions -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
-    <uses-permission android:name="android.permission.INTERNET">
-    </uses-permission>
+
+<!--    &lt;!&ndash; Notifications (Android 13+) &ndash;&gt;-->
+<!--    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" android:required="false" />-->
+
+<!--    &lt;!&ndash; Battery Optimization &ndash;&gt;-->
+<!--    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" android:required="false"/>-->
+
+<!--    &lt;!&ndash; Audio Permission &ndash;&gt;-->
+<!--    <uses-permission android:name="android.permission.RECORD_AUDIO" />-->
+<!--    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />-->
+
     <application
         android:label="Shop Pro"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
+        android:requestLegacyExternalStorage="true">
         <activity
             android:screenOrientation="landscape"
             android:name=".MainActivity"
@@ -61,6 +94,10 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Declare the TTS engine intent action for Android 11+ -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
     </queries>
 </manifest>

@@ -7,6 +7,7 @@ import 'font_sizes.dart';
 class TemporaryOverlay extends StatelessWidget {
   final BarcodeData? message; // Optional BarcodeData
   final String? errorMessage; // Optional error message
+  final String? nfpluBarcode;
   final Duration duration;
   final bool showLogo; // New parameter to control logo visibility
   final Uint8List? logoData;
@@ -15,6 +16,7 @@ class TemporaryOverlay extends StatelessWidget {
   TemporaryOverlay({
     this.message, // Nullable to allow for an error message
     this.errorMessage, // Allow passing a string message
+    this.nfpluBarcode,
     this.showLogo = false, // Default is false if not provided
     this.logoData,
     this.currencySymbol = 'AED', // Default currency symbol if not provided
@@ -81,7 +83,7 @@ class TemporaryOverlay extends StatelessWidget {
                     color: Colors.blue,
                   ),
                 ), // NAME ENGLISH
-                if (message!.arabic != null && message!.arabic!.trim().isNotEmpty)
+                if (message!.arabic.isNotEmpty)
                 Text(
                   message!.arabic,
                   style: TextStyle(
@@ -142,6 +144,28 @@ class TemporaryOverlay extends StatelessWidget {
                     color: Colors.red, // Set error message color
                   ),
                 ), // ERROR MESSAGE
+                Center(
+                  child: SizedBox(
+                    height: height/8,
+                    width: width/4,
+                    child:
+                    SfBarcodeGenerator(
+                      value: nfpluBarcode,
+                      symbology: Code128(),
+                      showValue: true,
+                      barColor: Colors.black54,
+                      textStyle: TextStyle(color: Colors.black54, fontSize: fontSizes.largerFontSize1),
+                    ),
+                  ),
+                ),
+                // Text(
+                //   nfpluBarcode!,
+                //   style: TextStyle(
+                //     fontWeight: FontWeight.bold,
+                //     fontSize: fontSizes.largerFontSize6,
+                //     color: Colors.black, // Set error message color
+                //   ),
+                // ),// ERROR MESSAGE
               ],
             ],
           ),

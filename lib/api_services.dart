@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'logger.dart';
 import 'model_barcode.dart';
+import 'package:http/http.dart' as http;
 
 class ApiHelper {
   final Dio _dio = Dio();
@@ -19,14 +20,15 @@ class ApiHelper {
         'INITIALIZING DIO WITH BASE URL: $_baseUrl', level: LogLevel.debug);
     _dio.options = BaseOptions(
       baseUrl: _baseUrl,
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 5),
-      sendTimeout: const Duration(seconds: 5),
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 10),
+      sendTimeout: const Duration(seconds: 10),
       headers: {
         'Content-Type': 'application/json',
       },
       validateStatus: (status) {
         // Allow all responses < 500 and include 429
+        Logger.log(status.toString(), level: LogLevel.debug);
         return status != null && (status == 429 || (status >= 200 && status < 300));
       },
     );
@@ -62,6 +64,28 @@ class ApiHelper {
     }
   }
 
+  Future<List<String>> fetchVideoNameList() async {
+    Logger.log('FETCHING VIDEO LIST FROM $_baseUrl.', level: LogLevel.debug);
+    try {
+      final response = await _dio.post('/videoList'); // Endpoint to get video list
+      Logger.log('RESPONSE = ${response.toString()}.', level: LogLevel.critical);
+      Logger.log('RESPONSE STATUS = ${response.statusCode.toString().toUpperCase()}.', level: LogLevel.debug);
+
+      if (response.statusCode == 200) {
+        // Extract the list of video names from the "videos" key in the response map
+        List<String> videos = List<String>.from(response.data['videos']);
+        Logger.log('VIDEO LIST FETCHED SUCCESSFULLY.', level: LogLevel.debug);
+        return videos;
+      } else {
+        Logger.log('FAILED TO FETCH VIDEO LIST.', level: LogLevel.error);
+        return [];
+      }
+    } catch (e) {
+      Logger.log('EXCEPTION OCCURRED WHILE FETCHING VIDEOS. ${e.toString().toUpperCase()}', level: LogLevel.error);
+      return [];
+    }
+  }
+
   Future<bool> login(String username, String password) async {
     Logger.log('DIO USER LOGIN WITH USERNAME=$username, PASSWORD = $password.',
         level: LogLevel.debug);
@@ -90,6 +114,7 @@ class ApiHelper {
     Logger.log('DIO TEST CONNECTION.', level: LogLevel.debug);
     try {
       final response = await _dio.get('/ping');
+      Logger.log('Response received: ${response.data}', level: LogLevel.debug);
       if (response.statusCode == 200) {
         Logger.log('DIO TEST SUCCESSFUL.', level: LogLevel.debug);
         return true;
@@ -203,18 +228,28 @@ class ApiHelper {
       return null;
     }
   }
+
+  Future<String?> fetchTextScroll() async {
+    Logger.log('FETCHING TEXT SCROLL CONTENT FROM $_baseUrl.', level: LogLevel.debug);
+    try {
+      // Adjust the endpoint to match your API route for fetching the text scroll content
+      final response = await _dio.get('/readTextScrollData');
+      Logger.log(
+          'RESPONSE STATUS = ${response.statusCode.toString().toUpperCase()}.',
+          level: LogLevel.debug);
+      if (response.statusCode == 200) {
+        // Assuming the response contains the text content as a string
+        Logger.log('TEXT SCROLL CONTENT FETCHED SUCCESSFULLY.', level: LogLevel.debug);
+        return response.data.toString(); // Return the text content
+      } else {
+        Logger.log('FAILED TO FETCH TEXT SCROLL CONTENT.', level: LogLevel.error);
+        return null;
+      }
+    } catch (e) {
+      Logger.log('EXCEPTION OCCURRED WHILE FETCHING TEXT SCROLL CONTENT. ${e.toString().toUpperCase()}', level: LogLevel.error);
+      return null;
+    }
+  }
 }
 
-// Future<Uint8List> downloadImage(String imageName) async {
-//   final Dio dio = Dio();
-//   final String url = 'http://example.com/images/$imageName'; // Use your actual URL here
-//   try {
-//     final response = await dio.get<Uint8List>(
-//       url,
-//       options: Options(responseType: ResponseType.stream),
-//     );
-//     return response.data!;
-//   } catch (e) {
-//     throw Exception('Failed to download image: $e');
-//   }
-// }
+

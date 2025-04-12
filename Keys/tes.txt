@@ -1,0 +1,22 @@
+PS C:\Windows\system32> keytool -genkeypair -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias keyAlias
+Enter keystore password:
+Re-enter new password:
+What is your first and last name?
+  [Unknown]:  pratheeesh pr
+What is the name of your organizational unit?
+  [Unknown]:  archer
+What is the name of your organization?
+  [Unknown]:  archer
+What is the name of your City or Locality?
+  [Unknown]:  dubai
+What is the name of your State or Province?
+  [Unknown]:  dubai
+What is the two-letter country code for this unit?
+  [Unknown]:  AE
+Is CN=pratheeesh pr, OU=archer, O=archer, L=dubai, ST=dubai, C=AE correct?
+  [no]:  y
+
+Generating 2,048 bit RSA key pair and self-signed certificate (SHA256withRSA) with a validity of 10,000 days
+        for: CN=pratheeesh pr, OU=archer, O=archer, L=dubai, ST=dubai, C=AE
+[Storing release-key.jks]
+PS C:\Windows\system32>

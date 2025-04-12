@@ -5,7 +5,8 @@ import 'package:convert/convert.dart';
 
 class AES {
   static const String key = "426494037028426494037028";
-  static const String AES_IV = "PGKEYENCDECIVSPC";
+  // static const String AES_IV = "PGKEYENCDECIVSPC"; // OLD IV
+  static const String AES_IV = "BWLKCKDONFNRJHAF";
   static const String HEX_DIGITS = "0123456789abcdef";
 
   static Uint8List createUint8ListFromHexString(String hex) {

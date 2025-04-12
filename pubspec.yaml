@@ -2,7 +2,7 @@ name: shop_pro
 description: "A new Flutter project."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 1.0.0+4
+version: 2.0.0+5
 
 environment:
   sdk: '>=3.4.3 <4.0.0'
@@ -34,6 +34,9 @@ dependencies:
   mqtt_client: ^10.0.0
   restart_app: ^1.2.1
   provider: ^6.1.2
+  video_player: ^2.9.2
+  auto_scroll_text: ^0.0.7
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:

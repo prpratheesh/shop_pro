@@ -31,6 +31,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'mqtt_service.dart';
 import 'package:restart_app/restart_app.dart';
+import 'package:video_player/video_player.dart';
+import 'package:auto_scroll_text/auto_scroll_text.dart';
 
 class LoginPage extends StatefulWidget {
   @override
@@ -49,11 +51,14 @@ class _LoginPageState extends State<LoginPage> {
   final DateFormat dateFormat = DateFormat('yyyy-MM-dd HH:mm:ss.SSS');
   late ApiHelper _apiHelper;
   List<String> imageUrls = [];
+  List<String> videoUrls = [];
   int _currentImageIndex = 0;
   Timer? _overlayRemovalTimer; // Timer for overlay removal
   Timer? _imageScrollTimer; // Timer for image scrolling
   bool imageLoadComplete = false;
+  bool videoLoadComplete = false;
   List<Uint8List> imageBytesList = []; // To store all downloaded images
+  List<Uint8List> videoBytesList = []; // To store all downloaded images
   final dbProvider = DBProvider.db;
   late ApiDataModel apiData;
   bool _isApiInitialized = false;
@@ -70,17 +75,31 @@ class _LoginPageState extends State<LoginPage> {
   late MqttService mqttService;
   List<String> _notifications = [];
   String imageDirName = 'dir1';
+  String videoDirName = '1';
   bool isTimerPaused = false; // Flag to track timer status
   String receivedMessage = '';
   int imagesDownloaded = 0; // Counter for downloaded images
+  int videosDownloaded = 0; // Counter for downloaded images
   String old_notification = 'dir1';
+  VideoPlayerController? _videoController;
+  int _currentVideoIndex = 0; // Track the current video
+  bool videoEnable = false; // Example flag to enable video
+  bool videDownloadComplete = false;
+  String textScrollContent = '';
+  String textScrollData = '';
+  final GlobalKey<_LoginPageState> _textScrollKey = GlobalKey<_LoginPageState>();
+  bool _loadComplete = false;
 
   @override
   void initState() {
     super.initState();
-    priceSpeaker.setVoice("en"); // British English
-    priceSpeaker.setSpeechRate(0.5); // Speed at 70%
-    // Access the MqttProvider
+    // priceSpeaker.setVoice("en"); // British English
+    // priceSpeaker.setSpeechRate(0.5); // Speed at 70%
+    // // Access the MqttProvider
+    priceSpeaker.setLanguage('en-US');
+    priceSpeaker.setVolume(1.0);
+    priceSpeaker.setSpeechRate(0.5);
+    priceSpeaker.setPitch(1.0);
     _initialize();
   }
 
@@ -93,43 +112,14 @@ class _LoginPageState extends State<LoginPage> {
     _overlayRemovalTimer?.cancel();
     _imageScrollTimer?.cancel();
     mqttService.disconnect();
+    _videoController?.removeListener(_videoPlayerListener);
+    _videoController?.dispose();
     super.dispose();
   }
 
   Future<void> _initialize() async {
     try {
       await getServerData(); // Fetch server data and initialize API
-      await _loadImageNameListFromApi(imageDirName); // Proceed with loading images
-
-      // Set state variables from API data
-      setState(() {
-        imageDuration = int.parse(apiData.imageDisplay);
-        displayDuration = int.parse(apiData.priceDisplay);
-        bannerEnable = apiData.bannerEnable.toLowerCase() == 'true';
-        logoEnable = apiData.logoEnable.toLowerCase() == 'true';
-        Logger.log('TIMER DATA LOADED: IMAGE TRANSITION IN->$imageDuration, PRICE DISPLAY IN->$displayDuration', level: LogLevel.info);
-      });
-
-      _startImageScrollTimer();
-
-      // Initialize image scrolling timer
-      // _imageScrollTimer = Timer.periodic(Duration(seconds: imageDuration), (Timer timer) {
-      //   if (imageUrls.isNotEmpty && imageLoadComplete) {
-      //     setState(() {
-      //       _currentImageIndex = (_currentImageIndex + 1) % imageUrls.length;
-      //     });
-      //   }
-      // });
-
-      // Initialize MQTT service
-      mqttService = MqttService(
-        broker: apiData.serverIP,
-        clientIdentifier: 'PC_${apiData.clientID}',
-        port: 1883,
-        onNotificationReceived: _handleNotification, // Pass the callback
-      );
-      await initializeMqtt();
-
       platform.setMethodCallHandler((MethodCall call) async {
         try {
           if (call.method == 'onBarcodeScanned') {
@@ -138,15 +128,13 @@ class _LoginPageState extends State<LoginPage> {
               _opacity = 1.0; // Set opacity to 1 when a barcode is scanned
               _barcodeController.text = barcode;
             });
-
             Logger.log('BARCODE SCANNED: $barcode', level: LogLevel.info);
-
             if (_isApiInitialized && _apiAvailable) {
               await barcodeInquire(barcode);
             } else {
-              Logger.log('PLEASE WAIT. API NOT AVAILABLE.', level: LogLevel.error);
+              Logger.log(
+                  'PLEASE WAIT. API NOT AVAILABLE.', level: LogLevel.error);
             }
-
             // Reduce opacity and clear barcode after display duration
             Future.delayed(Duration(seconds: displayDuration), () {
               setState(() {
@@ -156,9 +144,61 @@ class _LoginPageState extends State<LoginPage> {
             });
           }
         } catch (e) {
-          Logger.log('Error in handling native method call: $e', level: LogLevel.error);
+          scaffoldMsg('ERROR IN HANDLING BARCODE SCAN');
+          Logger.log('Error in handling native method call: $e',
+              level: LogLevel.error);
         }
       });
+      if (apiData.imageScroll == 'true') {
+        await _loadImageNameListFromApi(
+            imageDirName); // Proceed with loading images
+        // Set state variables from API data
+        setState(() {
+          videoEnable = false;
+          imageDuration = int.parse(apiData.imageDisplay);
+          displayDuration = int.parse(apiData.priceDisplay);
+          bannerEnable = apiData.bannerEnable.toLowerCase() == 'true';
+          logoEnable = apiData.logoEnable.toLowerCase() == 'true';
+          Logger.log(
+              'TIMER DATA LOADED: IMAGE TRANSITION IN->$imageDuration, PRICE DISPLAY IN->$displayDuration',
+              level: LogLevel.info);
+        });
+        _startImageScrollTimer();
+        mqttService = MqttService(
+          broker: apiData.serverIP,
+          clientIdentifier: 'PC_${apiData.clientID}',
+          port: 1883,
+          onNotificationReceived: _handleNotification, // Pass the callback
+        );
+        await initializeMqtt();
+      } //Fetch image scroll
+      if (apiData.videoScroll == 'true') {
+        Logger.log('VIDEO SCROLL', level: LogLevel.info);
+        try {
+          await getServerData();
+          if (apiData.videoScroll == 'true') {
+            await _loadVideoListFromApi();
+            if (videoBytesList.isNotEmpty) {
+              _initializeVideoPlayer();
+              setState(() {
+                Logger.log('VIDEO LOADED', level: LogLevel.critical);
+                videoEnable = true;
+              });
+            }
+          }
+        } catch (e) {
+          Logger.log('INITIALIZATION ERROR: $e', level: LogLevel.error);
+          Navigator.push(
+              context, MaterialPageRoute(builder: (context) => ConfigPage()));
+        }
+      } //Fetch video scroll
+      if(apiData.textScroll == 'true') {
+        textScrollContent = (await _apiHelper.fetchTextScroll())!;
+        Logger.log(textScrollContent, level: LogLevel.error);
+        setState(() {
+          textScrollData = textScrollContent;
+        });
+      } //Fetch text scroll
     } catch (e) {
       Logger.log('INITIALIZATION ERROR: $e', level: LogLevel.error);
       Navigator.push(
@@ -185,18 +225,20 @@ class _LoginPageState extends State<LoginPage> {
           break;
       }
     });
-
     try {
       await mqttService.connect();
       mqttService.messageStream.listen(
             (List<MqttReceivedMessage<MqttMessage>> messages) async {
           for (var receivedMessage in messages) {
-            final MqttPublishMessage mqttMessage = receivedMessage.payload as MqttPublishMessage;
-            final String notification = utf8.decode(mqttMessage.payload.message);
+            final MqttPublishMessage mqttMessage = receivedMessage
+                .payload as MqttPublishMessage;
+            final String notification = utf8.decode(
+                mqttMessage.payload.message);
           }
         },
         onError: (error) {
-          Logger.log('MQTT BROKER STREAM ERROR: $error', level: LogLevel.critical);
+          Logger.log(
+              'MQTT BROKER STREAM ERROR: $error', level: LogLevel.critical);
         },
       );
     } catch (e) {
@@ -204,13 +246,60 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  Future<void> _handleNotification(notification) async{
+  //video player functions
+  Future<void> _initializeVideoPlayer() async {
+    // Get the temporary directory to save the video file.
+    final directory = await getApplicationDocumentsDirectory();
+    final videoFile = await _saveVideoToFile(videoBytesList[_currentVideoIndex], directory);
+    // Initialize the video player with the saved file.
+    _videoController = VideoPlayerController.file(videoFile)
+      ..initialize().then((_) {
+        setState(() {
+          _videoController?.play();
+          videoEnable = true; // Set video enable flag to true after initialization
+        });
+        _videoController?.setLooping(false);
+        _videoController?.addListener(_videoPlayerListener);
+      });
+  }
+
+// Save the video to a specific directory and return the File object.
+  Future<File> _saveVideoToFile(Uint8List videoData, Directory directory) async {
+    // Define the file path and name in the directory.
+    final videoPath = '${directory.path}/downloaded_video_${_currentVideoIndex}.mp4';
+    final videoFile = File(videoPath);
+
+    // Write the video data to the file.
+    await videoFile.writeAsBytes(videoData);
+    return videoFile;
+  }
+
+  void _videoPlayerListener() {
+    if (_videoController != null &&
+        _videoController!.value.position == _videoController!.value.duration) {
+      // Video has finished playing, move to the next video
+      _loadNextVideo();
+    }
+  }
+
+  void _loadNextVideo() {
+    _currentVideoIndex = (_currentVideoIndex + 1) % videoBytesList.length;
+    _videoController?.removeListener(_videoPlayerListener);
+    _videoController?.dispose();
+
+    _initializeVideoPlayer();
+  }
+
+  //video player functions
+
+  Future<void> _handleNotification(notification) async {
     setState(() {
       receivedMessage = notification;
     });
-    if(notification == 'dir1'){
+    if (notification == 'dir1') {
       _pauseImageScrollTimer();
-      Logger.log('NEW NOTIFICATION RECEIVED: $notification', level: LogLevel.critical);
+      Logger.log(
+          'NEW NOTIFICATION RECEIVED: $notification', level: LogLevel.critical);
       imageDirName = 'dir1';
       setState(() {
         _currentImageIndex = 0;
@@ -218,9 +307,10 @@ class _LoginPageState extends State<LoginPage> {
       });
       await _loadImageNameListFromApi(imageDirName);
       _resumeImageScrollTimer();
-    }else if(notification == 'dir2'){
+    } else if (notification == 'dir2') {
       _pauseImageScrollTimer();
-      Logger.log('NEW NOTIFICATION RECEIVED: $notification', level: LogLevel.critical);
+      Logger.log(
+          'NEW NOTIFICATION RECEIVED: $notification', level: LogLevel.critical);
       imageDirName = 'dir2';
       setState(() {
         _currentImageIndex = 0;
@@ -228,33 +318,18 @@ class _LoginPageState extends State<LoginPage> {
       });
       await _loadImageNameListFromApi(imageDirName);
       _resumeImageScrollTimer();
+    } else if (notification == 'msg') {
+      textScrollContent = (await _apiHelper.fetchTextScroll())!;
+      Logger.log(textScrollContent, level: LogLevel.error);
+      setState(() {
+        textScrollData = textScrollContent;
+      });
     }
   }
-
-  // Future<void> connect() async {
-  //   try {
-  //     await mqttService.connect(['system/notifications']);
-  //     Logger.log('CONNECTED TO MQTT BROKER.', level: LogLevel.info);
-  //   } catch (e) {
-  //     Logger.log('ERROR CONNECTING MQTT BROKER.', level: LogLevel.error);
-  //     mqttService.disconnect();
-  //     Logger.log('MQTT SERVICE DISCONNECTED.', level: LogLevel.error);
-  //     Logger.log(e.toString().toUpperCase(), level: LogLevel.error);
-  //     throw e; // Rethrow the error if needed for handling in the caller
-  //   }
-  // }
 
   Future<void> _loadImageNameListFromApi(imageDirName) async {
     int totalImages = 0; // Set this before starting the download process
     totalImages = 0;
-    if (_apiHelper == null) {
-      Logger.log('API NOT INITIALIZED, WAITING...', level: LogLevel.info);
-      await Future.delayed(const Duration(seconds: 1));
-      setState(() {
-        _isApiInitialized = false;
-      });
-      return _loadImageNameListFromApi(imageDirName); // Retry after delay
-    }
 
     try {
       final fetchedImages = await _apiHelper.fetchImageNameList(imageDirName);
@@ -269,10 +344,12 @@ class _LoginPageState extends State<LoginPage> {
       // Call to fetch the logo image
       final logoBytes = await _apiHelper.fetchLogo(); // Fetch logo
       if (logoBytes != null) {
-        Logger.log('LOGO FETCHED SUCCESSFULLY, SIZE: ${logoBytes.length} bytes', level: LogLevel.info);
+        Logger.log('LOGO FETCHED SUCCESSFULLY, SIZE: ${logoBytes.length} bytes',
+            level: LogLevel.info);
         // Store the logo bytes in a variable
         // Assuming you have a variable declared like this:
-        _logoImageData = logoBytes; // Create this variable in your class to hold logo data
+        _logoImageData =
+            logoBytes; // Create this variable in your class to hold logo data
       } else {
         Logger.log('FAILED TO FETCH LOGO.', level: LogLevel.error);
         _logoImageData = null; // Reset logo data if fetching failed
@@ -296,18 +373,50 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  Future<void> _loadVideoListFromApi() async {
+    int totalVideos = 0;
+
+    try {
+      final fetchedVideos = await _apiHelper.fetchVideoNameList();
+      Logger.log('VIDEO LIST FETCHED: $fetchedVideos', level: LogLevel.info);
+      setState(() {
+        videoUrls = fetchedVideos ?? [];
+        videoLoadComplete = true;
+      });
+      totalVideos = videoUrls.length;
+      Logger.log('VIDEO COUNT = $totalVideos', level: LogLevel.info);
+
+      for (String videoName in videoUrls) {
+        _handleVideoDownload(totalVideos, videoName);
+      }
+      setState(() {
+        _isApiInitialized = true;
+      });
+    } catch (e) {
+      Logger.log('ERROR FETCHING VIDEOS: $e', level: LogLevel.error);
+      setState(() {
+        videoUrls = [];
+        videoLoadComplete = false;
+      });
+      setState(() {
+        _isApiInitialized = false;
+      });
+    }
+  }
+
   // Function to start the timer
   void _startImageScrollTimer() {
     // If the timer is already running, return
     if (_imageScrollTimer != null && _imageScrollTimer!.isActive) return;
 
-    _imageScrollTimer = Timer.periodic(Duration(seconds: imageDuration), (Timer timer) {
-      if (imageUrls.isNotEmpty && imageLoadComplete && !isTimerPaused) {
-        setState(() {
-          _currentImageIndex = (_currentImageIndex + 1) % imageUrls.length;
+    _imageScrollTimer =
+        Timer.periodic(Duration(seconds: imageDuration), (Timer timer) {
+          if (imageUrls.isNotEmpty && imageLoadComplete && !isTimerPaused) {
+            setState(() {
+              _currentImageIndex = (_currentImageIndex + 1) % imageUrls.length;
+            });
+          }
         });
-      }
-    });
   }
 
   // Function to pause the timer
@@ -332,14 +441,17 @@ class _LoginPageState extends State<LoginPage> {
     final arguments = call.arguments as String;
     final currentTime = DateTime.now();
     final formattedTime = dateFormat.format(currentTime);
-    Logger.log('METHOD CALL RECEIVED AT $formattedTime WITH METHOD: $methodName', level: LogLevel.info);
+    Logger.log(
+        'METHOD CALL RECEIVED AT $formattedTime WITH METHOD: $methodName',
+        level: LogLevel.info);
     Logger.log('RECEIVED ARGUMENTS: $arguments', level: LogLevel.info);
 
     if (methodName == 'onBarcodeScanned') {
       final handleStartTime = DateTime.now();
       Logger.log('HANDLER STARTED: $methodName', level: LogLevel.info);
       if (processing) {
-        Logger.log('PROCESSING IN PROGRESS, IGNORING NEW BARCODE', level: LogLevel.info);
+        Logger.log('PROCESSING IN PROGRESS, IGNORING NEW BARCODE',
+            level: LogLevel.info);
         return;
       }
 
@@ -349,7 +461,9 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       if (lastBarcode == arguments &&
-          DateTime.now().difference(lastScanTime ?? DateTime.fromMillisecondsSinceEpoch(0)) < debounceDuration) {
+          DateTime.now().difference(
+              lastScanTime ?? DateTime.fromMillisecondsSinceEpoch(0)) <
+              debounceDuration) {
         Logger.log('BARCODE SCAN DEBOUNCED: $arguments', level: LogLevel.info);
         return;
       }
@@ -362,23 +476,30 @@ class _LoginPageState extends State<LoginPage> {
         isBarcodeScanned = true;
       });
 
-      Logger.log('START HANDLING BARCODE AT ${dateFormat.format(handleStartTime)}', level: LogLevel.info);
+      Logger.log(
+          'START HANDLING BARCODE AT ${dateFormat.format(handleStartTime)}',
+          level: LogLevel.info);
       await _handleBarcodeInput();
       final handleEndTime = DateTime.now();
-      Logger.log('END HANDLING BARCODE AT ${dateFormat.format(handleEndTime)}', level: LogLevel.info);
-      Logger.log('PROCESSING TIME: ${handleEndTime.difference(handleStartTime).inMilliseconds} MS', level: LogLevel.info);
+      Logger.log('END HANDLING BARCODE AT ${dateFormat.format(handleEndTime)}',
+          level: LogLevel.info);
+      Logger.log('PROCESSING TIME: ${handleEndTime
+          .difference(handleStartTime)
+          .inMilliseconds} MS', level: LogLevel.info);
 
       setState(() {
         processing = false;
       });
-      if(!processing){
+      if (!processing) {
         // _barcodeController.clear();
       }
     }
   }
 
   Future<void> _handleBarcodeInput() async {
-    if (DateTime.now().difference(lastScanTime ?? DateTime.fromMillisecondsSinceEpoch(0)) < debounceDuration) {
+    if (DateTime.now().difference(
+        lastScanTime ?? DateTime.fromMillisecondsSinceEpoch(0)) <
+        debounceDuration) {
       return;
     }
     lastScanTime = DateTime.now();
@@ -391,10 +512,12 @@ class _LoginPageState extends State<LoginPage> {
     });
   }
 
-  Future<void> _handleImageDownload(String imageDirName, int totalImages, String imageName) async {
+  Future<void> _handleImageDownload(String imageDirName, int totalImages,
+      String imageName) async {
     setState(() {
       imagesDownloaded = 0;
       imageBytesList.clear();
+      videDownloadComplete = false;
     });
     try {
       // Bundle the arguments in a Map
@@ -412,10 +535,53 @@ class _LoginPageState extends State<LoginPage> {
         imagesDownloaded++; // Increment the counter for downloaded images
       });
 
-      Logger.log('$imagesDownloaded IMAGE DOWNLOADED SUCCESSFULLY OUT OF $totalImages', level: LogLevel.info);
+      Logger.log(
+          '$imagesDownloaded IMAGE DOWNLOADED SUCCESSFULLY OUT OF $totalImages',
+          level: LogLevel.info);
     } catch (e) {
-      Logger.log('IMAGE $imagesDownloaded DOWNLOAD FAILED.', level: LogLevel.error);
+      Logger.log(
+          'IMAGE $imagesDownloaded DOWNLOAD FAILED.', level: LogLevel.error);
       Logger.log('ERROR DOWNLOADING IMAGE: $e', level: LogLevel.error);
+    }
+  }
+
+// Call this method after video download is complete.
+  Future<void> _handleVideoDownload(int totalVideos, String videoName) async {
+    setState(() {
+      videosDownloaded = 0;
+      videoBytesList.clear();
+    });
+
+    try {
+      final Map<String, String> args = {
+        'videoPath': videoDirName,
+        'videoName': videoName,
+        'ipAddress': apiData.serverIP ?? '',
+        'portNo': apiData.portNo ?? ''
+      };
+
+      // Download the video
+      final Uint8List videoBytes = await compute(downloadVideo, args);
+      setState(() {
+        videoBytesList.add(videoBytes);
+        videosDownloaded++;
+      });
+
+      Logger.log('$videosDownloaded VIDEO DOWNLOADED SUCCESSFULLY OUT OF $totalVideos', level: LogLevel.info);
+
+      // Once all videos are downloaded, initialize the player with the first one
+      if (videosDownloaded == totalVideos) {
+        await _initializeVideoPlayer(); // Initialize and play the first video
+        setState(() {
+          videDownloadComplete = true;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        videDownloadComplete = false;
+      });
+      Logger.log('VIDEO DOWNLOAD FAILED.', level: LogLevel.error);
+      Logger.log('ERROR DOWNLOADING VIDEO: $e', level: LogLevel.error);
     }
   }
 
@@ -431,20 +597,17 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> getServerData() async {
     try {
-      // Logger.log('ENTERED L1-----', level: LogLevel.info);
-      apiData = (await dbProvider.getApiData())!;
-      if (apiData.serverIP != null && apiData.portNo != null) {
-        // Logger.log('ENTERED L2-----', level: LogLevel.info);
-        _apiHelper = ApiHelper(); // Initialize _apiHelper
-        _apiHelper.initializeDio(apiData.serverIP, apiData.portNo);
-        Logger.log('DIO INITIALIZED SUCCESSFULLY.', level: LogLevel.info);
-      } else {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => ConfigPage()),
-        );
-      }
-    } catch (e) {
+      apiData = (await dbProvider.getApiData());
+      _apiHelper = ApiHelper(); // Initialize _apiHelper
+      _apiHelper.initializeDio(apiData.serverIP, apiData.portNo);
+      Logger.log('DIO INITIALIZED SUCCESSFULLY.', level: LogLevel.info);
+      setState(() {
+        _loadComplete = true;
+      });
+        } catch (e) {
+      setState(() {
+        _loadComplete = false;
+      });
       Logger.log('ERROR FETCHING SERVER DATA: $e', level: LogLevel.error);
       Navigator.push(
         context,
@@ -458,7 +621,7 @@ class _LoginPageState extends State<LoginPage> {
     setState(() {
       _apiAvailable = false;
     });
-    if(barcode=="\$TRIOSSETUP\$"){
+    if (barcode == "\$TRIOSSETUP\$") {
       _hideSystemBars();
       setState(() {
         _apiAvailable = true;
@@ -475,7 +638,7 @@ class _LoginPageState extends State<LoginPage> {
         if (data != null) {
           _onScanCompleted(data);
         } else {
-          if(!overlay_show) {
+          if (!overlay_show) {
             setState(() {
               overlay_show = true;
             });
@@ -484,16 +647,19 @@ class _LoginPageState extends State<LoginPage> {
             Logger.log('ITEM NOT FOUND', level: LogLevel.info);
             final overlay = Overlay.of(context);
             _overlayEntry = OverlayEntry(
-              builder: (context) => TemporaryOverlay(errorMessage: 'ITEM NOT FOUND', duration: Duration(seconds: displayDuration)),
+              builder: (context) =>
+                  TemporaryOverlay(errorMessage: 'ITEM NOT FOUND',nfpluBarcode: barcode,
+                      duration: Duration(seconds: displayDuration)),
             );
             overlay.insert(_overlayEntry!);
             // Automatically remove the overlay after 5 seconds and update the state
-            _overlayRemovalTimer = Timer(Duration(seconds: displayDuration), () async {
-              _removeOverlay();
-              setState(() {
-                overlay_show = false;
-              });
-            });
+            _overlayRemovalTimer =
+                Timer(Duration(seconds: displayDuration), () async {
+                  _removeOverlay();
+                  setState(() {
+                    overlay_show = false;
+                  });
+                });
           }
           priceSpeaker.speakMessage("ITEM NOTT FOUND");
           Logger.log('NO DATA FOUND', level: LogLevel.info);
@@ -507,9 +673,10 @@ class _LoginPageState extends State<LoginPage> {
     });
   }
 
-  void _showOverlay(BarcodeData message) async{
+  void _showOverlay(BarcodeData message) async {
     // Remove any existing overlay before showing a new one
-    if(message.barcode!='' || message.barcode!=null) {
+    // Logger.log('${message.retail.runtimeType}',level: LogLevel.critical);
+    if (message.barcode.isNotEmpty) {
       if (message.barcode != 'STATUS429' &&
           message.description != 'STATUS429') {
         setState(() {
@@ -517,40 +684,46 @@ class _LoginPageState extends State<LoginPage> {
         });
         _removeOverlay();
         // Logger.log('CURRENCY : ${apiData.currency}', level: LogLevel.error);
-        if(apiData.voice=='VOICE1' && apiData.currency == 'AED') {
+        if (apiData.voice == 'VOICE1' && apiData.currency == 'AED') {
           priceSpeaker.speakPriceAED(message.retail);
-        }else if(apiData.voice=='VOICE1' && apiData.currency == 'OMR'){
+        } else if (apiData.voice == 'VOICE1' && apiData.currency == 'OMR') {
           priceSpeaker.speakPriceOMR(message.retail);
         }
-        else{
+        else {
           priceSpeaker.speakPriceText(message.retail);
         }
-        Logger.log('PRICE DISPLAY STARTING FOR $displayDuration SECONDS', level: LogLevel.info);
+        Logger.log('PRICE DISPLAY STARTING FOR $displayDuration SECONDS',
+            level: LogLevel.info);
         final overlay = Overlay.of(context);
         // Determine the logo to display
         Uint8List? logoData = _logoImageData; // Use network logo if available
-        logoData ??= (await rootBundle.load('assets/images/Logo.jpg')).buffer.asUint8List();
+        logoData ??= (await rootBundle.load('assets/images/Logo.jpg')).buffer
+            .asUint8List();
         _overlayEntry = OverlayEntry(
-          builder: (context) => TemporaryOverlay(
-            message: message,
-            duration: Duration(seconds: displayDuration),
-            showLogo: logoEnable, // Pass the logoEnable boolean
-            logoData: logoData, // Pass logo data to TemporaryOverlay
-            currencySymbol: apiData.currency,
-          ),
+          builder: (context) =>
+              TemporaryOverlay(
+                message: message,
+                duration: Duration(seconds: displayDuration),
+                showLogo: logoEnable,
+                // Pass the logoEnable boolean
+                logoData: logoData,
+                // Pass logo data to TemporaryOverlay
+                currencySymbol: apiData.currency,
+              ),
         );
         overlay.insert(_overlayEntry!);
         // Automatically remove the overlay after 5 seconds and update the state
-        _overlayRemovalTimer = Timer(Duration(seconds: displayDuration), () async {
-          _removeOverlay();
-          setState(() {
-            overlay_show = false;
-          });
-        });
+        _overlayRemovalTimer =
+            Timer(Duration(seconds: displayDuration), () async {
+              _removeOverlay();
+              setState(() {
+                overlay_show = false;
+              });
+            });
       } else {
         priceSpeaker.speakMessage('SCAN LIMIT REACHED');
       }
-    }else{
+    } else {
       setState(() {
         overlay_show = true;
       });
@@ -583,7 +756,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _onScanCompleted(BarcodeData data) {
-    if(!overlay_show) {
+    if (!overlay_show) {
       Logger.log('ENTERED $overlay_show', level: LogLevel.info);
       _showOverlay(data);
     }
@@ -608,14 +781,19 @@ class _LoginPageState extends State<LoginPage> {
     ));
   }
 
-  @override
   Widget _barcodeScanner(FontSizes fontSizes) {
     return AnimatedOpacity(
       opacity: _opacity,
       duration: Duration(seconds: displayDuration),
       child: Container(
-        width: MediaQuery.of(context).size.width / 3,
-        height: MediaQuery.of(context).size.height / 10,
+        width: MediaQuery
+            .of(context)
+            .size
+            .width / 3,
+        height: MediaQuery
+            .of(context)
+            .size
+            .height / 10,
         alignment: Alignment.center,
         child: Stack(
           children: [
@@ -625,42 +803,60 @@ class _LoginPageState extends State<LoginPage> {
                 color: Colors.grey[200], // Off-white background color
                 borderRadius: BorderRadius.circular(5.0),
               ),
-              child: TextFormField(
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(15),
-                ],
-                focusNode: _focusNode,
-                autofocus: false,
-                // enabled: false,
-                controller: _barcodeController,
-                style: TextStyle(
-                  fontSize: fontSizes.baseFontSize,
-                  color: Colors.black, // Text color inside the text field
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderSide: const BorderSide(color: Colors.black, width: 5.0),
-                    borderRadius: BorderRadius.circular(5.0),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: Colors.black),
-                    borderRadius: BorderRadius.circular(5.0),
-                  ),
-                  labelStyle: const TextStyle(color: Colors.black),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 5.0),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: Colors.black),
-                    borderRadius: BorderRadius.circular(5.0),
-                  ),
-                ),
-                onEditingComplete: () {
+              child: GestureDetector(
+                onTap: () {
+                  // Prevent focus on the TextFormField
+                  FocusScope.of(context).requestFocus(FocusNode());
                   _hideSystemBars();
-                  FocusScope.of(context).unfocus();
                 },
+                onDoubleTap: () {
+                  // Prevent focus on the TextFormField
+                  FocusScope.of(context).requestFocus(FocusNode());
+                  _hideSystemBars();
+                },
+                child: TextFormField(
+                  keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(15),
+                  ],
+                  focusNode: _focusNode,
+                  autofocus: false,
+                  // enabled: false,
+                  controller: _barcodeController,
+                  style: TextStyle(
+                    fontSize: fontSizes.baseFontSize,
+                    color: Colors.black, // Text color inside the text field
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderSide: const BorderSide(
+                          color: Colors.black, width: 5.0),
+                      borderRadius: BorderRadius.circular(5.0),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Colors.black),
+                      borderRadius: BorderRadius.circular(5.0),
+                    ),
+                    labelStyle: const TextStyle(color: Colors.black),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 5.0),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Colors.black),
+                      borderRadius: BorderRadius.circular(5.0),
+                    ),
+                  ),
+                  onTap: () {
+                    FocusScope.of(context).requestFocus(FocusNode());
+                    _hideSystemBars();
+                  },
+                  onEditingComplete: () {
+                    _hideSystemBars();
+                    FocusScope.of(context).unfocus();
+                  },
+                ),
               ),
             ),
             // Positioned widgets for icons
@@ -695,77 +891,226 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final fontSizes = FontSizes.fromContext(context);
-    return Scaffold(
-      body: SingleChildScrollView(
-        child: AnimatedSwitcher(
-          duration: const Duration(seconds: 1), // Animation duration
-          child: Container(
-            key: ValueKey<int>(_currentImageIndex), // Unique key for the current image
-            // padding: const EdgeInsets.symmetric(horizontal: 20),
-            height: MediaQuery.of(context).size.height,
-            width: MediaQuery.of(context).size.width,
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: imageBytesList.isNotEmpty
-                    ? MemoryImage(imageBytesList[_currentImageIndex]) // Use downloaded image
-                    : const AssetImage('assets/images/bg1.jpg') as ImageProvider, // Use fallback predefined image
-                fit: BoxFit.fill,
-                colorFilter: ColorFilter.mode(
-                    Colors.black.withOpacity(0), BlendMode.luminosity),
+    if(_loadComplete) {
+      return Scaffold(
+        body: Stack(
+          children: [
+            // The background content: video or image
+            videDownloadComplete
+                ? Container(
+              key: ValueKey<int>(_currentImageIndex),
+              // Unique key for the current image
+              height: MediaQuery
+                  .of(context)
+                  .size
+                  .height,
+              width: MediaQuery
+                  .of(context)
+                  .size
+                  .width,
+              child: AspectRatio(
+                aspectRatio: _videoController?.value.aspectRatio ?? 16 / 9,
+                child: _videoController != null &&
+                    _videoController!.value.isInitialized
+                    ? VideoPlayer(_videoController!)
+                    : const Center(
+                    child: CircularProgressIndicator()), // Show a loader if the video isn't initialized
               ),
-              borderRadius: const BorderRadius.all(Radius.circular(0)),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                    color: Colors.grey.shade200,
-                    offset: const Offset(2, 4),
-                    blurRadius: 5,
-                    spreadRadius: 2)
-              ],
-              gradient: const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.blue, Colors.purple],
+            )
+                : AnimatedSwitcher(
+              duration: const Duration(seconds: 1), // Animation duration
+              child: Container(
+                key: ValueKey<int>(_currentImageIndex),
+                // Unique key for the current image
+                height: MediaQuery
+                    .of(context)
+                    .size
+                    .height,
+                width: MediaQuery
+                    .of(context)
+                    .size
+                    .width,
+                decoration: BoxDecoration(
+                  image: DecorationImage(
+                    image: imageBytesList.isNotEmpty
+                        ? MemoryImage(
+                        imageBytesList[_currentImageIndex]) // Use downloaded image
+                        : const AssetImage(
+                        'assets/images/bg1.jpg') as ImageProvider,
+                    // Use fallback predefined image
+                    fit: BoxFit.fill,
+                    colorFilter: ColorFilter.mode(
+                        Colors.black.withOpacity(0), BlendMode.luminosity),
+                  ),
+                  borderRadius: const BorderRadius.all(Radius.circular(0)),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                        color: Colors.grey.shade200,
+                        offset: const Offset(2, 4),
+                        blurRadius: 5,
+                        spreadRadius: 2)
+                  ],
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.blue, Colors.purple],
+                  ),
+                ),
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                const Spacer(),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 50.0), // Optional: Add padding for spacing from the bottom
-                  child: _barcodeScanner(fontSizes), // Place the barcode scanner at the bottom
+            // Persistent TextScroll widget (This is outside the AnimatedSwitcher now)
+            if (textScrollData.isNotEmpty)
+              Positioned(
+                bottom: 65,
+                left: 0,
+                right: 0,
+                child: Container(
+                  color: Colors.black.withOpacity(0.5),
+                  padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
+                  child: AutoScrollText(
+                    textScrollData,
+                    style: TextStyle(fontSize: fontSizes.largerFontSize6, color: Colors.white),
+                  ),
                 ),
-                // Conditionally display the banner
-                Visibility(
-                  visible: bannerEnable, // Banner visibility based on bannerEnable
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Container(
-                      color: Colors.black.withOpacity(0.7), // Banner background color
-                      height: MediaQuery.of(context).size.height/10,
-                      width: MediaQuery.of(context).size.width,
-                      child: Center(
-                        child: Text(
-                          'Scan Your Price Here',
-                          style: TextStyle(color: Colors.white, fontSize: fontSizes.largerFontSize8), // Use fontSizes for consistency
-                        ),
-                      ),
+              ),
+            // Barcode scanner at the bottom
+            // Positioned(
+            //   bottom: 50.0,
+            //   // Adjust based on the desired position from the bottom
+            //   left: 0,
+            //   right: 0,
+            //   child: _barcodeScanner(
+            //       fontSizes), // Place the barcode scanner at the bottom
+            // ),
+            // Conditionally display the banner
+            Visibility(
+              visible: bannerEnable, // Banner visibility based on bannerEnable
+              child: Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  color: Colors.black.withOpacity(0.7),
+                  // Banner background color
+                  height: MediaQuery
+                      .of(context)
+                      .size
+                      .height / 10,
+                  child: Center(
+                    child: Text(
+                      'Scan Your Price Here',
+                      style: TextStyle(color: Colors.white,
+                          fontSize: fontSizes
+                              .largerFontSize8), // Use fontSizes for consistency
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
-      ),
-    );
+      );
+    }
+    else{
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
   }
-
-  // void _changeImage() {
-  //   setState(() {
-  //     _currentImageIndex = (_currentImageIndex + 1) % imageBytesList.length; // Cycle through images
-  //   });
+  // Widget build(BuildContext context) {
+  //   final fontSizes = FontSizes.fromContext(context);
+  //   return Scaffold(
+  //     body: SingleChildScrollView(
+  //       child: videDownloadComplete ?
+  //       Container(
+  //         key: ValueKey<int>(_currentImageIndex), // Unique key for the current image
+  //         height: MediaQuery.of(context).size.height,
+  //         width: MediaQuery.of(context).size.width,
+  //         child: AspectRatio(
+  //           aspectRatio: _videoController?.value.aspectRatio ?? 16 / 9,
+  //           child: _videoController != null && _videoController!.value.isInitialized
+  //               ? VideoPlayer(_videoController!)
+  //               : const Center(child: CircularProgressIndicator()), // Show a loader if the video isn't initialized
+  //         ),
+  //       ) :
+  //       AnimatedSwitcher(
+  //         duration: const Duration(seconds: 1), // Animation duration
+  //         child: Container(
+  //           key: ValueKey<int>(_currentImageIndex), // Unique key for the current image
+  //           height: MediaQuery.of(context).size.height,
+  //           width: MediaQuery.of(context).size.width,
+  //           decoration: BoxDecoration(
+  //             image: DecorationImage(
+  //               image: imageBytesList.isNotEmpty
+  //                   ? MemoryImage(imageBytesList[_currentImageIndex]) // Use downloaded image
+  //                   : const AssetImage('assets/images/bg1.jpg') as ImageProvider, // Use fallback predefined image
+  //               fit: BoxFit.fill,
+  //               colorFilter: ColorFilter.mode(
+  //                   Colors.black.withOpacity(0), BlendMode.luminosity),
+  //             ),
+  //             borderRadius: const BorderRadius.all(Radius.circular(0)),
+  //             boxShadow: <BoxShadow>[
+  //               BoxShadow(
+  //                   color: Colors.grey.shade200,
+  //                   offset: const Offset(2, 4),
+  //                   blurRadius: 5,
+  //                   spreadRadius: 2)
+  //             ],
+  //             gradient: const LinearGradient(
+  //               begin: Alignment.topCenter,
+  //               end: Alignment.bottomCenter,
+  //               colors: [Colors.blue, Colors.purple],
+  //             ),
+  //           ),
+  //           child: Column(
+  //             crossAxisAlignment: CrossAxisAlignment.center,
+  //             mainAxisAlignment: MainAxisAlignment.center,
+  //             children: <Widget>[
+  //               const Spacer(),
+  //               // Conditionally display scrolling text based on apiData.textScroll
+  //               if (apiData.textScroll == 'true' && textScrollData!='')
+  //                 Padding(
+  //                   padding: const EdgeInsets.symmetric(horizontal: 0.0, vertical: 0.0),
+  //                   child: TextScroll(
+  //                     textScrollData ?? '', // Use an empty string if textScrollContent is null
+  //                     velocity: Velocity(pixelsPerSecond: Offset(30, 0)),
+  //                     mode: TextScrollMode.bouncing, // Choose your scroll mode
+  //                     delayBefore: Duration(seconds: 1),
+  //                     pauseBetween: Duration(seconds: 1),
+  //                     textAlign: TextAlign.center,
+  //                     style: TextStyle(color: Colors.white, fontSize: 18),
+  //                   ),
+  //                 ),
+  //               Padding(
+  //                 padding: const EdgeInsets.only(bottom: 50.0), // Optional: Add padding for spacing from the bottom
+  //                 child: _barcodeScanner(fontSizes), // Place the barcode scanner at the bottom
+  //               ),
+  //               // Conditionally display the banner
+  //               Visibility(
+  //                 visible: bannerEnable, // Banner visibility based on bannerEnable
+  //                 child: Align(
+  //                   alignment: Alignment.bottomCenter,
+  //                   child: Container(
+  //                     color: Colors.black.withOpacity(0.7), // Banner background color
+  //                     height: MediaQuery.of(context).size.height / 10,
+  //                     width: MediaQuery.of(context).size.width,
+  //                     child: Center(
+  //                       child: Text(
+  //                         'Scan Your Price Here',
+  //                         style: TextStyle(color: Colors.white, fontSize: fontSizes.largerFontSize8), // Use fontSizes for consistency
+  //                       ),
+  //                     ),
+  //                   ),
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //         ),
+  //       ),
+  //     ),
+  //   );
   // }
 }
 
@@ -787,5 +1132,23 @@ Future<Uint8List> downloadImage(Map<String, String> args) async {
     return response.data!;
   } catch (e) {
     throw Exception('Failed to download image: $e');
+  }
+}
+
+Future<Uint8List> downloadVideo(Map<String, String> args) async {
+  final String videoPath = args['videoPath']!;
+  final String videoName = args['videoName']!;
+  final String ipAddress = args['ipAddress']!;
+  final String portNo = args['portNo']!;
+  final Dio dio = Dio();
+  final String url = 'http://$ipAddress:$portNo/video/$videoName';
+  try {
+    final response = await dio.get<Uint8List>(
+      url,
+      options: Options(responseType: ResponseType.bytes), // Use ResponseType.bytes for binary data
+    );
+    return response.data!;
+  } catch (e) {
+    throw Exception('Failed to download video: $e');
   }
 }
