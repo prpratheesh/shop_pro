@@ -105,12 +105,14 @@ class TemporaryOverlay extends StatelessWidget {
                       TextSpan(
                         text: currencySymbol == 'OMR'
                             ? message!.retail.toStringAsFixed(3) // 3 decimal places for OMR
-                            : message!.retail.toStringAsFixed(2), // 2 decimal places for AED or others
+                            : currencySymbol == 'CDF'
+                            ? message!.retail.toInt().toString() // No decimals for CDF
+                            : message!.retail.toStringAsFixed(2), // 2 decimal places for others
                         style: TextStyle(
                           color: Colors.green,
                           fontWeight: FontWeight.bold,
                           fontSize: fontSizes.largerFontSize10,
-                        ), // Set the color and style for retail price
+                        ),
                       ),
                       TextSpan(
                         text: ' /-',

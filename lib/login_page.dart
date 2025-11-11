@@ -689,6 +689,11 @@ class _LoginPageState extends State<LoginPage> {
         } else if (apiData.voice == 'VOICE1' && apiData.currency == 'OMR') {
           priceSpeaker.speakPriceOMR(message.retail);
         }
+        else if(apiData.currency == 'CDF'){
+          String info = '${message.retail.toInt()} CDF';
+          Logger.log(info);
+          await priceSpeaker.speakMessage(info);
+        }
         else {
           priceSpeaker.speakPriceText(message.retail);
         }

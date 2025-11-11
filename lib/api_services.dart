@@ -116,7 +116,7 @@ class ApiHelper {
     Logger.log('${Uri.parse('$_baseUrl/ping')}', level: LogLevel.debug);
     try {
       // final response = await _client.get(Uri.parse(('http://10.0.2.2:3000/ping')));
-      final response = await _client.get(Uri.parse('http://192.168.0.138:3000/ping'));
+      final response = await _client.get(Uri.parse('$_baseUrl/ping'));
       Logger.log('Response received: ${response.body}', level: LogLevel.debug);
       if (response.statusCode == 200) {
         Logger.log('HTTP TEST SUCCESSFUL.', level: LogLevel.debug);

@@ -45,12 +45,13 @@ class _WelcomePageState extends State<ConfigPage>
   FocusNode? _focusNodeActivation;
   String? _selectedCurrency;
   List<String> currencyCodes = [
+    'AED', // UAE Dirham
     'BHD', // Bahraini Dinar
+    'CDF', // Congolese Franc
     'KWD', // Kuwaiti Dinar
     'OMR', // Omani Rial
     'QAR', // Qatari Riyal
     'SAR', // Saudi Riyal
-    'AED', // UAE Dirham
   ];
   String? _selectedVoice;
   List<String> voiceCodes = [
@@ -1625,6 +1626,9 @@ class _WelcomePageState extends State<ConfigPage>
       await priceSpeaker.speakPriceAED(samplePrice);
     } else if (_selectedVoice == 'VOICE1' && _selectedCurrency == 'OMR') {
       await priceSpeaker.speakPriceOMR(samplePrice);
+    }
+    else if(_selectedCurrency == 'CDF'){
+      await priceSpeaker.speakMessage('25745 CDF');
     }
     else {
       await priceSpeaker.speakPriceText(samplePrice);
